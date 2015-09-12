@@ -1,15 +1,28 @@
 # Sensor Device Simulator
 # 
 
-import time, threading, random, json, sys, urllib3
+import time, threading, random, json, sys, urllib3,os
 import uuid as uuidlib
 from string import Template
 from sim_utils import *
 
 try:
     import hcp_config as config
-except Exception as e:
-    print str(e)
+except ImportError as e:
+    if os.path.exists('hcp_config_template.py'):
+        print '''
+ ***********************************************************************************
+*                                                                                   *
+*  Before the simulator can be used, you need to first configure it as follows:     *
+*                                                                                   *
+*  1) copy (or rename) the file "hcp_config_template.py" to "hcp_config.py"         *
+*                                                                                   *
+*  2) edit "hcp_config.py" and customize the values according to your HCP settings  *
+*                                                                                   *
+*  3) restart this script                                                           *
+*                                                                                   *
+ *********************************************************************************** 
+'''
     sys.exit(1)
 
 # --------------------------------------------------------------------------------
