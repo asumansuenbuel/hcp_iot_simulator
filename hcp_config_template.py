@@ -14,3 +14,7 @@ proxy_url=''
 hcp_device_id = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 hcp_oauth_credentials = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 hcp_message_type_id_from_device='xxxxxxxxxxxxxxxxxxxx'
+
+# this is the directory where the simulator objects are stored, relative to the current directory
+# current user should have read and write permission
+default_data_folder = 'simdata'
