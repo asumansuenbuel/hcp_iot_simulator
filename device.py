@@ -18,6 +18,7 @@ except ImportError as e:
 *  Before the simulator can be used, you need to first configure it as follows:     *
 *                                                                                   *
 *  1) copy (or rename) the file "hcp_config_template.py" to "hcp_config.py"         *
+*     (the hcp_config.py file can also reside in your current working directory)    *
 *                                                                                   *
 *  2) edit "hcp_config.py" and customize the values according to your HCP settings  *
 *                                                                                   *
@@ -119,7 +120,7 @@ class Sensor(FilePersistedObject):
         else:
             return random.randint(min,max)
         
-    def nextValue(self,timestamp = None,dummyMode=False):
+    def nextValue(self,timestamp = None,lastValue=None,lastTimestamp=None,dummyMode=False):
         ts = int(time.time()) if timestamp == None else timestamp
         if dummyMode:
             value = self.getRandomValueInRange()
@@ -157,7 +158,7 @@ class Sensor(FilePersistedObject):
 
         if not dummyMode:
             self.__lastTimestamp__ = ts
-        res = { 'value' : value, 'timestamp' : ts}
+            res = {'value' : value, 'timestamp' : ts, 'lastValue' : self.__lastValue__, 'lastTimestamp' : self.__lastTimestamp__}
         return res
 
     def validate(self):        
@@ -398,3 +399,21 @@ class Device(FilePersistedObject):
         s += indent + '  description = stringUnescape("' + stringEscape(self.description) + '")\n'
         s += indent + ')'
         return s
+
+# ================================================================================
+#
+# Thread class
+#
+# ================================================================================
+
+# A Thread instance represents a process that simulates a device emitting sensor values
+# to HCP. A Thread belongs to a device and is a transient object; it only exists while the
+# simulation is running. It's life-cycle (start,stop,pause) is controlled by the device
+
+class Thread:
+
+    def __init__(self,device):
+        self.device = device
+        self.__timer__ = None
+        self.__lastValue__ = None
+        self.__lastTimestamp__ = None

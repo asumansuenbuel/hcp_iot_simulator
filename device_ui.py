@@ -157,7 +157,7 @@ class DeviceUI(Device):
             self.stopButton.config(state=DISABLED)
             return
 
-        if self.__timer__ != None:
+        if self.threadsAreRunning():
             self.startButton.config(state=DISABLED)
             self.pauseButton.config(state=ACTIVE)
             self.stopButton.config(state=ACTIVE)
