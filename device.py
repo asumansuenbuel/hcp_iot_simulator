@@ -1,10 +1,12 @@
 # Sensor Device Simulator
 # 
 
-import time, threading, random, json, sys, urllib3,os
+import time, threading, random, json, sys, urllib3, os
 import uuid as uuidlib
 from string import Template
 from sim_utils import *
+
+sys.path.insert(0,os.getcwd())
 
 try:
     import hcp_config as config

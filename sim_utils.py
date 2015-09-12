@@ -2,10 +2,13 @@
 # utility function for hcp iot simulator
 #
 
-import os
+import os, sys
 import urllib
 from Tkinter import *
 import tkMessageBox as messageBox
+
+sys.path.insert(0,os.getcwd())
+
 try:
     import hcp_config as config
 except ImportError:

@@ -9,6 +9,8 @@ from sim_utils import defaultDataFolder
 
 sim = SimulatorUI()
 
+#print "current working directory: " + os.getcwd()
+
 cmdLine = CommandLine()
 if cmdLine.parse():
     if hasattr(cmdLine,'fileArgument'):
