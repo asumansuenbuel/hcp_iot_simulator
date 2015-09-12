@@ -4,16 +4,18 @@
 import sys, os
 
 from simulator_ui import *
+from process_argv import *
+from sim_utils import defaultDataFolder
 
 sim = SimulatorUI()
-if len(sys.argv) > 1:
-    arg = sys.argv[1]
-    if os.path.exists(arg):
-        sim.load_file_on_init = arg
 
-#import code
-#code.interact(local=locals())
+cmdLine = CommandLine()
+if cmdLine.parse():
+    if hasattr(cmdLine,'fileArgument'):
+        sim.load_file_on_init = cmdLine.fileArgument
 
-sim.openUI()
+    ensureDataFolderExists()
+    sim.openUI()
+
 
         

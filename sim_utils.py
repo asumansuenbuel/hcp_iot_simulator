@@ -6,8 +6,13 @@ import os
 import urllib
 from Tkinter import *
 import tkMessageBox as messageBox
+try:
+    import hcp_config as config
+except ImportError:
+    config = {}
 
-defaultDataFolder = 'simdata'
+defaultDataFolder = config.default_data_folder if hasattr(config,'default_data_folder') else 'simdata'
+
 
 filePersistenceInitialized = False
 
