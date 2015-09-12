@@ -1,0 +1,7 @@
+#!/bin/sh
+#
+# shell wrapper for simulator ui
+#
+
+dir=`dirname $0`
+python ${dir}/simui.py $*
