@@ -73,7 +73,7 @@ class SimulatorUI(Simulator):
 
         self.closeButton = Button(views,text="Close All",bg="grey")
         self.closeButton.grid(row=2,column=1)
-        #self.closeButton['command'] = self._pauseSimulationFromUI
+        self.closeButton['command'] = self._closeAllDeviceWindows
         views.pack(padx=5,pady=5,fill=X)
 
         controls = Frame(f,relief=SUNKEN,bd=1)
@@ -82,16 +82,16 @@ class SimulatorUI(Simulator):
 
         self.startButton = Button(controls,text="Start All",bg="grey")
         self.startButton.grid(row=2,column=0)
-        #self.startButton['command'] = self._startSimulationFromUI
+        self.startButton['command'] = self._startSimulationFromUI
 
         self.pauseButton = Button(controls,text="Pause",bg="grey")
         self.pauseButton.grid(row=2,column=1)
-        #self.pauseButton['command'] = self._pauseSimulationFromUI
+        self.pauseButton['command'] = self._pauseSimulationFromUI
 
         self.stopButton = Button(controls,text="Stop")
         self.stopButton.grid(row=2,column=2)
         self.stopButton.config(bg="Red")
-        #self.stopButton['command'] = self._stopSimulationFromUI
+        self.stopButton['command'] = self._stopSimulationFromUI
         controls.pack(padx=5,pady=5,fill=X)
 
 
@@ -132,6 +132,24 @@ class SimulatorUI(Simulator):
         for d in self.devices:
             self._openOrFocusDeviceWindow(d)
 
+    def _closeAllDeviceWindows(self):
+        for d in self.devices:
+            if d.hasWindowOpen():
+                d.closeUI()
+
+    def _startSimulationFromUI(self):
+        self._openAllDeviceWindows()
+        for d in self.devices:
+            d._startSimulationFromUI()
+
+    def _pauseSimulationFromUI(self):
+        for d in self.devices:
+            d._pauseSimulationFromUI()
+
+    def _stopSimulationFromUI(self):
+        for d in self.devices:
+            d._stopSimulationFromUI()
+                
     def applyUI(self):
         for field in self.stringVars.keys():
             updateValueFromStringVar(self,field)
@@ -146,6 +164,7 @@ class SimulatorUI(Simulator):
         if fileName == '':
             return
         try:
+            self._closeAllDeviceWindows()
             self.loadFromFile(fileName,globals=globals())
         except Exception as e:
             msg = "problems loading '" + fileName + '": ' + str(e)

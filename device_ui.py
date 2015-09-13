@@ -295,7 +295,7 @@ class DeviceUI(Device):
 
         f.pack(fill=BOTH,padx=10,pady=10,expand=1);
         outerframe.pack(fill=BOTH,expand=1)
-        master.title("Sensor Device")
+        master.title('Device "' + self.name + '"')
         self.__parent__ = master
         self.updateControlButtons()
         self.updateSensorsFrame()
