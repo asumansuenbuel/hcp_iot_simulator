@@ -54,6 +54,7 @@ class SimulatorUI(Simulator):
         self.devicesFrame.grid(row=rowcnt,columnspan=5,pady=5,sticky=W)
         rowcnt += 1
 
+        
         b = Button(deviceSection, text = "Add New Device", command = self.createDeviceUI)
         b.grid(row=rowcnt,column=0,sticky=W)
         b = Button(deviceSection, text = "Add Device From File", command = self.openDeviceFromFile)
@@ -61,6 +62,38 @@ class SimulatorUI(Simulator):
 
         deviceSection.pack(padx=5,pady=5,fill=X,expand=1)
         
+
+        views = Frame(f,relief=SUNKEN,bd=1)
+
+        Label(views,text="Views",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
+
+        self.openButton = Button(views,text="Open All Device Windows",bg="grey")
+        self.openButton.grid(row=2,column=0)
+        self.openButton['command'] = self._openAllDeviceWindows
+
+        self.closeButton = Button(views,text="Close All",bg="grey")
+        self.closeButton.grid(row=2,column=1)
+        #self.closeButton['command'] = self._pauseSimulationFromUI
+        views.pack(padx=5,pady=5,fill=X)
+
+        controls = Frame(f,relief=SUNKEN,bd=1)
+
+        Label(controls,text="Controls",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
+
+        self.startButton = Button(controls,text="Start All",bg="grey")
+        self.startButton.grid(row=2,column=0)
+        #self.startButton['command'] = self._startSimulationFromUI
+
+        self.pauseButton = Button(controls,text="Pause",bg="grey")
+        self.pauseButton.grid(row=2,column=1)
+        #self.pauseButton['command'] = self._pauseSimulationFromUI
+
+        self.stopButton = Button(controls,text="Stop")
+        self.stopButton.grid(row=2,column=2)
+        self.stopButton.config(bg="Red")
+        #self.stopButton['command'] = self._stopSimulationFromUI
+        controls.pack(padx=5,pady=5,fill=X)
+
 
         buttonsFrame = Frame(f)
         saveButton = Button(buttonsFrame,text='Save To File',command = self.applyUI)
@@ -75,6 +108,29 @@ class SimulatorUI(Simulator):
         outerframe.pack(fill=BOTH,expand=1)
         self.updateDevicesFrame()
         return f
+
+    def _getAllDeviceWindows(self):
+        root = self.__root__
+        dwins = []
+        for w in root.winfo_children():
+            if hasattr(w,'appObject'):
+                if isinstance(w.appObject,DeviceUI):
+                    dwins.append(w)
+        return dwins
+
+    def _openOrFocusDeviceWindow(self,d):
+        if d.hasWindowOpen():
+            print "Device " + d.name + ": open"
+        else:
+            print "Device " + d.name + ": closed"
+            try:
+                d.openAsToplevel(self)
+            except Exception as e:
+                print 'could not open device window for "' + d.name + '": ' + str(e)
+    
+    def _openAllDeviceWindows(self):
+        for d in self.devices:
+            self._openOrFocusDeviceWindow(d)
 
     def applyUI(self):
         for field in self.stringVars.keys():

@@ -85,6 +85,7 @@ class SensorUI(Sensor):
 
     def openAsToplevel(self):
         top = Toplevel()
+        top.appObject = self
         self.buildUI(master = top)
         #self.__root__.wait_window(top)
                    
@@ -268,6 +269,7 @@ class DeviceUI(Device):
         l = Label(outputTitleFrame,text="Output",font="-weight bold")
         l.pack(anchor=W,side=LEFT)
         Button(outputTitleFrame,text="Clear",command=self._clearOutput).pack(anchor=W,side=RIGHT)
+        Button(outputTitleFrame,text="Stats",command=self._showStats).pack(anchor=W,side=RIGHT)
         outputTitleFrame.pack(anchor=W,fill=X,expand=1)
 
         oframe = Frame(outputFrame,bd=2,relief=SUNKEN)
@@ -301,7 +303,15 @@ class DeviceUI(Device):
 
     def _clearOutput(self):
         self.outputText.delete('1.0',END)
-    
+
+    def _showStats(self):
+        s = self.statInfo
+        self.info(s)
+        self.__parent__.after(0,self._showStatsInAlert)
+
+    def _showStatsInAlert(self):
+        messageBox.showinfo("Simulation stats",self.statInfo)
+        
     def _updateMessageFormatEditor(self):
         t = self.messageFormatEditor
         t.delete('1.0',END)
@@ -358,11 +368,22 @@ class DeviceUI(Device):
 
     def openAsToplevel(self,openingWindow=None):
         top = Toplevel()
+        top.appObject = self
         self.buildUI(master = top)
         top.protocol("WM_DELETE_WINDOW", lambda : self.closeUI(top))
         #top.geometry('+5+242')
         #top.wait_visibility(top)
         #print str(openingWindow.winfo_geometry())
+
+    def hasWindowOpen(self):
+        try:
+            dwins = self.simulator._getAllDeviceWindows()
+            for w in dwins:
+                if hasattr(w,'appObject') and w.appObject == self:
+                    return True
+            return False
+        except:
+            return False
         
     def _startSimulationFromUI(self):
         freq = float(self.stringVars['frequencyInSeconds']['stringVar'].get())
@@ -436,7 +457,8 @@ class DeviceUI(Device):
         if self.threadsAreRunning():
             if messageBox.askokcancel("Quit", "Simulation thread(s) are still running. Do you want to stop them and close this window?"):
                 self._stopSimulationFromUI()
-                time.sleep(2)
+                self.__parent__.update_idletasks()
+                time.sleep(1)
             else:
                 return
         top.destroy()

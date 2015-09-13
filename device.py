@@ -354,8 +354,8 @@ class Device(FilePersistedObject):
     @property
     def statInfo(self):
         s = ''
-        s += "running threads count:               " + self.runningThreadsCount + '\n'
-        s += "total messages sent during this run: " + self.messageCount + '\n'
+        s += "running threads count:               " + str(self.runningThreadsCount) + '\n'
+        s += "total messages sent during this run: " + str(self.messageCount) + '\n'
         return s
             
     def info(self,message):
