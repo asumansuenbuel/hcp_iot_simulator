@@ -364,7 +364,8 @@ class DeviceUI(Device):
         b.grid(row=rowcnt,column=0,sticky=W)
         createStringInput(self,'instanceCount',devicesFrame,rowcnt,column=1,width=8,label="   number of instances")
         simulatorWindow = devicesFrame.winfo_toplevel()
-        b['command'] = lambda : self.openAsToplevel(simulatorWindow)
+        #b['command'] = lambda : self.openAsToplevel(simulatorWindow)
+        b['command'] = lambda : self.simulator._openOrFocusDeviceWindow(self)
 
     def openAsToplevel(self,openingWindow=None):
         top = Toplevel()
