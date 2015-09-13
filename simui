@@ -2,6 +2,11 @@
 #
 # shell wrapper for simulator ui
 #
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 
 dir=`dirname $0`
 python ${dir}/simui.py $*
