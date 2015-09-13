@@ -1,3 +1,9 @@
+# Simular Device and Sensor UI
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 from Tkinter import *
 import tkMessageBox as messageBox
 from tkFileDialog import askopenfilename
@@ -258,8 +264,11 @@ class DeviceUI(Device):
         controls.pack(padx=5,pady=5,fill=X)
 
         outputFrame = Frame(f)
-        l = Label(outputFrame,text="Output",font="-weight bold")
-        l.pack(anchor=W)
+        outputTitleFrame = Frame(outputFrame)
+        l = Label(outputTitleFrame,text="Output",font="-weight bold")
+        l.pack(anchor=W,side=LEFT)
+        Button(outputTitleFrame,text="Clear",command=self._clearOutput).pack(anchor=W,side=RIGHT)
+        outputTitleFrame.pack(anchor=W,fill=X,expand=1)
 
         oframe = Frame(outputFrame,bd=2,relief=SUNKEN)
 
@@ -290,6 +299,9 @@ class DeviceUI(Device):
         self.updateSensorsFrame()
         return f
 
+    def _clearOutput(self):
+        self.outputText.delete('1.0',END)
+    
     def _updateMessageFormatEditor(self):
         t = self.messageFormatEditor
         t.delete('1.0',END)
@@ -312,7 +324,7 @@ class DeviceUI(Device):
 
     def _testMessageFormat(self):
         text = self.messageFormatEditor.get('1.0',END)
-        msg = self.generateHCPMessage(messageFormat=text,dummyMode=True)
+        msg = Thread(self).generateHCPMessage(messageFormat=text,dummyMode=True)
         self.info("generated example message:")
         self.info(msg)
         infomsg = "Message format check succeeded."

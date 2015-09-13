@@ -1,5 +1,8 @@
+# Utility functions and file i/o for hcp iot simulator
 #
-# utility function for hcp iot simulator
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
 #
 
 import os, sys

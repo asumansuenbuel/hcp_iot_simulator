@@ -1,5 +1,8 @@
 # Sensor Device Simulator
 # 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
 
 import time, threading, random, json, sys, urllib3, os
 import uuid as uuidlib
@@ -107,8 +110,6 @@ class Sensor(FilePersistedObject):
         self.description = description
         self.device = None
         # internal fields:
-        self.__lastValue__ = None
-        self.__lastTimestamp__ = None
         self.validate()
         self.initFilePersistence('sensor')
 
@@ -125,17 +126,17 @@ class Sensor(FilePersistedObject):
         if dummyMode:
             value = self.getRandomValueInRange()
         else:
-            if self.__lastValue__ == None:
+            if lastValue == None:
                 if self.startValue != None:
                     value = self.startValue
                 else:
                     value = self.getRandomValueInRange()
-                self.__lastValue__ = value
+                nextLastValue = value
             else:
-                lastTs = self.__lastTimestamp__
+                lastTs = lastTimestamp
                 if lastTs == None:
                     value = self.getRandomValueInRange()
-                    self.__lastValue__ = value
+                    nextLastValue = value
                 else:
                     tdiff = ts - lastTs
                     vfactor = float(tdiff)/float(self.varianceSeconds)
@@ -146,9 +147,15 @@ class Sensor(FilePersistedObject):
                     #print "vfactor: " + str(vfactor)
                     #print "maxValueDiff: " + str(maxValueDiff)
                     #print "valueDiff: " + str(valueDiff)
-                    value = self.__lastValue__ + valueDiff
+                    value = lastValue + valueDiff
+                    if value < self.minValue or value > self.maxValue:
+                        value = lastValue - valueDiff
+                        #print "different sign"
+                    if value < self.minValue or value > self.maxValue:
+                        value = self.getRandomValueInRange()
+                        #print "new random value"
                     #print "value: " + str(value)
-                    self.__lastValue__ = value
+                    nextLastValue = value
                     
         if self.isFloat:
             if self.ndigitsAfterDecimalPoint != None:
@@ -156,9 +163,11 @@ class Sensor(FilePersistedObject):
         else:
             value = int(round(value))
 
+        nextLastTimestamp = ts
         if not dummyMode:
-            self.__lastTimestamp__ = ts
-            res = {'value' : value, 'timestamp' : ts, 'lastValue' : self.__lastValue__, 'lastTimestamp' : self.__lastTimestamp__}
+            res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
+        else:
+            res = {'value' : value, 'timestamp' : ts}
         return res
 
     def validate(self):        
@@ -176,13 +185,17 @@ class Sensor(FilePersistedObject):
         else:
             self.device.info(message)
         
-    def __str__(self):
-        s = "Sensor '" + self.name + "', unit: " + self.unitName
+    def __str__(self,indent=''):
+        s = indent
+        s += "Sensor '" + self.name + "', unit: " + self.unitName
         s += ", minValue: " + str(self.minValue)
         s += ", minValue: " + str(self.maxValue)
         s += ", startValue: " + str(self.startValue)
         s += ", variance: " + str(self.varianceValue) + " in " + str(self.varianceSeconds) + " seconds"
         return s
+
+    def __repr__(self):
+        return self.__str__()
 
     def getPythonConstructorString(self,indent="",standalone=False):
         s = ''
@@ -240,8 +253,11 @@ class Device(FilePersistedObject):
         self.description = description
         self.instanceCount = instanceCount
         self.simulator = None
-        self.__timer__ = None
-        self.__lastFrequencyInSeconds__ = None
+
+        #self.theThread = Thread(self) # for testing start with a single thread; this will go away
+
+        self.threadPool = []
+
         self.uuid = uuid if uuid != None else str(uuidlib.uuid1())
         self.initFilePersistence('device')
         for sensor in sensors:
@@ -290,90 +306,58 @@ class Device(FilePersistedObject):
         else:
             return self.messageFormat
 
-    def generateHCPMessage(self,dummyMode=False,messageFormat=None):
-        msg = self.getMessageFormat() if messageFormat == None else messageFormat;
-        msgTemplate = Template(msg)
-        ts = int(time.time())
-        evalStr = 'msgTemplate.safe_substitute(timestamp=ts,'
-        evalStr += 'deviceid="' + self.uuid + '"'
-        for s in self.sensors:
-            varname = s.name + '_value'
-            valueInfo = s.nextValue(timestamp = ts,dummyMode=dummyMode);
-            value = valueInfo['value']
-            evalStr += ',' + varname + '=' + str(value)
-        evalStr += ')'
-        return eval(evalStr)
-
-    def send_to_hcp(self,message):
-        debug_communication = 0
-        #self.info("to hcp: " + message)
-        if (config.proxy_url == ''):
-            http = urllib3.PoolManager()
-        else:
-            http = urllib3.proxy_from_url(config.proxy_url)
-
-        url='https://iotmms' + config.hcp_account_id + config.hcp_landscape_host + '/com.sap.iotservices.mms/v1/api/http/data/' + str(self.hcpDeviceId)
-        
-        if debug_communication == 1:
-            self.info('url: ' + url)
-
-        headers = urllib3.util.make_headers(user_agent=None)
-
-        # use with authentication
-        headers['Authorization'] = 'Bearer ' + self.hcpOauthCredentials
-        headers['Content-Type'] = 'application/json;charset=utf-8'
-
-        # construct the body
-        body = '{ "mode" : "async", "messageType" : "' + str(self.messageTypeId) + '", "messages" : '
-        body += message
-        body += '}'
-        if debug_communication == 1:
-            print body
-
-        r = http.urlopen('POST', url, body=body, headers=headers)
-        if debug_communication == 1:
-            self.info("send_to_hcp():" + str(r.status))
-            self.info(r.data)
-        else:
-            self.info("status: " + str(r.status) + " " + r.data)
-
     def threadsAreRunning(self):
-        return self.__timer__ != None
-    
-    def startGenerateHCPMessageThread(self,frequencyInSeconds,dummyMode=False):
-        msg = self.generateHCPMessage()
-        if not dummyMode:
-            self.send_to_hcp(msg)
-        else:
-            self.info("[dummy mode] message to hcp: " + (' '.join(msg.split('\n'))))
-        self.__timer__ = threading.Timer(frequencyInSeconds,Device.startGenerateHCPMessageThread,[self,frequencyInSeconds,dummyMode])
-        self.__timer__.start()
+        for thread in self.threadPool:
+            if thread.threadIsRunning():
+                return True
+        return False
     
     # starts simulating values using the given frequency
     def start(self,frequencyInSeconds,dummyMode=False):
-        global fun
-        # if a thread is already running stop it
-        self.stop()
-        self.info("starting time for sensor '" + self.name + "'...")
-        self.__lastFrequencyInSeconds__ = frequencyInSeconds
-        #self.__timer__ = threading.Timer(frequencyInSeconds,Sensor.nextValue,[self])
-        #self.__timer__.start()
-        self.startGenerateHCPMessageThread(frequencyInSeconds,dummyMode);
+        self.stop(reset = True)
+        self.info("creating and starting " + str(self.instanceCount) + " simulation thread(s)...")
 
-    def stop(self,paused = False):
-        result = False
-        if self.__timer__ != None:
-            self.__timer__.cancel()
-            self.__timer__ = None
-            self.info("value emission " + ("paused" if paused else "stopped"))
-            result = True
-        if not paused:
-            self.__lastTimestamp__ = None
-            self.__lastValue__ = None
+        for i in range(self.instanceCount):
+            self.info("starting simulation thread " + str(i) + "...")
+            #self.theThread.start(frequencyInSeconds,dummyMode=dummyMode)
+            t = self._getThreadObject()
+            t.start(frequencyInSeconds,dummyMode=dummyMode)
+            self.info("thread " + str(i) + " started.")
 
+        self.info("successfully started " + str(self.instanceCount) + " simulation thread(s).")
+        
+    def stop(self,paused = False,reset = False):
+        #self.theThread.stop(paused=paused)
+        for thread in self.threadPool:
+            thread.stop(reset=reset)
+                      
     def pause(self):
-        self.stop(paused = True)
+        #self.theThread.pause()
+        for thread in self.threadPool:
+            thread.pause()
 
+    @property
+    def messageCount(self):
+        msgcnt = 0
+        for thread in self.threadPool:
+            msgcnt += thread.messageCount
+        return msgcnt
+
+    @property
+    def runningThreadsCount(self):
+        cnt = 0
+        for thread in self.threadPool:
+            if thread.threadIsRunning():
+                cnt += 1
+        return cnt
+    
+    @property
+    def statInfo(self):
+        s = ''
+        s += "running threads count:               " + self.runningThreadsCount + '\n'
+        s += "total messages sent during this run: " + self.messageCount + '\n'
+        return s
+            
     def info(self,message):
         print message
 
@@ -400,6 +384,43 @@ class Device(FilePersistedObject):
         s += indent + ')'
         return s
 
+    def nextThreadCounter(self):
+        if not hasattr(self,'__threadCounter__'):
+            self.__threadCounter__ = 0
+        cnt = self.__threadCounter__
+        self.__threadCounter__ += 1
+        return cnt
+
+    # returns an unused thread object for use in a new simulation run
+    # the object can be taken from the pool or a new one is created
+    def _getThreadObject(self):
+        theThread = None
+        for existingThread in self.threadPool:
+            if existingThread.threadIsInUse():
+                continue
+            theThread = existingThread
+            self.info('reusing thread object with id "' + theThread.idstr + '"')
+        if theThread == None:
+            # no thread in the pool found, create a new one and add it to the pool
+            theThread = Thread(self)
+            self.threadPool.append(theThread)
+            self.info('new thread object created with id "' + theThread.idstr + '"')
+        theThread.reset()
+        return theThread
+    
+    def __str__(self,indent = ''):
+        s = ''
+        s += indent + 'Device "' + self.name + '"\n'
+        s += indent + '  Sensors:\n'
+        for sensor in self.sensors:
+            s += sensor.__str__(indent=indent+'    ')
+            s += '\n'
+        return s
+
+
+    def __repr__(self):
+        return self.__str__()
+
 # ================================================================================
 #
 # Thread class
@@ -414,6 +435,122 @@ class Thread:
 
     def __init__(self,device):
         self.device = device
+        self.id = device.nextThreadCounter()
+        self.reset()
+
+    @property
+    def idstr(self):
+        s = '00000000' + hex(self.id)[2:]
+        l = len(s)
+        return s[l-8:]
+
+    @property
+    def uuid(self):
+        return self.device.uuid + "-" + self.idstr
+
+    def reset(self):
         self.__timer__ = None
         self.__lastValue__ = None
         self.__lastTimestamp__ = None
+        self.__messageCounter__ = 0
+
+    def send_to_hcp(self,message):
+        device = self.device
+        debug_communication = 0
+        #self.info("to hcp: " + message)
+        if (config.proxy_url == ''):
+            http = urllib3.PoolManager()
+        else:
+            http = urllib3.proxy_from_url(config.proxy_url)
+
+        url='https://iotmms' + config.hcp_account_id + config.hcp_landscape_host + '/com.sap.iotservices.mms/v1/api/http/data/' + str(device.hcpDeviceId)
+        
+        if debug_communication == 1:
+            self.info('url: ' + url)
+
+        headers = urllib3.util.make_headers(user_agent=None)
+
+        # use with authentication
+        headers['Authorization'] = 'Bearer ' + device.hcpOauthCredentials
+        headers['Content-Type'] = 'application/json;charset=utf-8'
+
+        # construct the body
+        body = '{ "mode" : "async", "messageType" : "' + str(device.messageTypeId) + '", "messages" : '
+        body += message
+        body += '}'
+        if debug_communication == 1:
+            print body
+        else:
+            self.info("[" + self.idstr + "] message to hcp: " + (' '.join(message.split('\n'))))
+
+        r = http.urlopen('POST', url, body=body, headers=headers)
+        if debug_communication == 1:
+            self.info("send_to_hcp():" + str(r.status))
+            self.info(r.data)
+        else:
+            self.info("[" + self.idstr + "] response status: " + str(r.status) + " " + r.data)
+
+    def generateHCPMessage(self,dummyMode=False,messageFormat=None):
+        device = self.device
+        msg = device.getMessageFormat() if messageFormat == None else messageFormat;
+        msgTemplate = Template(msg)
+        ts = int(time.time())
+        evalStr = 'msgTemplate.safe_substitute(timestamp=ts,'
+        evalStr += 'deviceid="' + self.uuid + '"'
+        for s in device.sensors:
+            varname = s.name + '_value'
+            valueInfo = s.nextValue(timestamp = ts,lastValue=self.__lastValue__,lastTimestamp=self.__lastTimestamp__,dummyMode=dummyMode);
+            value = valueInfo['value']
+            if not dummyMode:
+                self.__lastValue__ = valueInfo['lastValue']
+                self.__lastTimestamp__ = valueInfo['lastTimestamp']
+            evalStr += ',' + varname + '=' + str(value)
+        evalStr += ')'
+        return eval(evalStr)
+
+    def startGenerateHCPMessageThread(self,frequencyInSeconds,dummyMode=False):
+        device = self.device
+        msg = self.generateHCPMessage()
+        if not dummyMode:
+            self.send_to_hcp(msg)
+        else:
+            self.info("[" + self.idstr + "] message to dummy: " + (' '.join(msg.split('\n'))))
+        self.__messageCounter__ += 1
+        self.__timer__ = threading.Timer(device.frequencyInSeconds,Thread.startGenerateHCPMessageThread,[self,device.frequencyInSeconds,dummyMode])
+        self.__timer__.start()
+    
+    def start(self,frequencyInSeconds,dummyMode=False):
+        # if a thread is already running stop it
+        self.stop()
+        self.info("[" + self.idstr + "] starting simulation thread with frequency " + str(frequencyInSeconds))
+        self.__lastFrequencyInSeconds__ = frequencyInSeconds
+        #self.__timer__ = threading.Timer(frequencyInSeconds,Sensor.nextValue,[self])
+        #self.__timer__.start()
+        self.startGenerateHCPMessageThread(frequencyInSeconds,dummyMode);
+
+    def stop(self,paused=False,reset=False):
+        if self.__timer__ != None:
+            self.__timer__.cancel()
+            self.__timer__ = None
+            self.info("[" + self.idstr + "] simulation " + ("paused" if paused else "stopped") + ".")
+        if not paused:
+            self.__lastTimestamp__ = None
+            self.__lastValue__ = None
+            if reset:
+                self.reset()
+
+    def pause(self):
+        self.stop(paused=True)
+            
+    def threadIsRunning(self):
+        return self.__timer__ != None
+
+    def threadIsInUse(self):
+        return self.__timer__ != None or self.__lastTimestamp__ != None
+
+    @property
+    def messageCount(self):
+        return self.__messageCounter__
+    
+    def info(self,msg):
+        self.device.info(msg)

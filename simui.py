@@ -1,6 +1,11 @@
 #
 # main control window for simulator ui
 #
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 import sys, os
 
 from simulator_ui import *

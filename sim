@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# shell wrapper for simulator shell
+#
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
+
+dir=`dirname $0`
+python ${dir}/sim.py $*

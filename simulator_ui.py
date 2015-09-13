@@ -1,6 +1,11 @@
 #
-# main control window for simulator ui
+# Simulator UI interface (class SimulatorUI)
 #
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 
 from Tkinter import *
 import tkMessageBox as messageBox

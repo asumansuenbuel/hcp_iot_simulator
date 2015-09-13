@@ -1,6 +1,11 @@
 #
 # process the command line arguments of the simulator
 #
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 
 import getopt, os, sys
 
@@ -31,7 +36,7 @@ class CommandLine:
             if os.path.exists(arg):
                 self.fileArgument = arg
             else:
-                print '"' + arg + '" does not exist.'
+                print 'File "' + arg + '" does not exist.'
                 return False
 
         return True

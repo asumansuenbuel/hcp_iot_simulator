@@ -1,3 +1,9 @@
+# Simulator class definition
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 from device import *
 from sim_utils import *
 
@@ -76,3 +82,20 @@ class Simulator(FilePersistedObject):
 
     def info(self,message):
         print "info: " + message
+
+    def __str__(self):
+        s = ''
+        s += 'Simulator '
+        if self.name != None and self.name.strip() != "":
+            s += '"' + self.name + '"'
+        s += '\n'
+        if len(self.devices) == 0:
+            s += '  no devices'
+        else:
+            s += '  Devices:\n'
+            for d in self.devices:
+                s += d.__str__(indent='    ')
+        return s
+
+    def __repr__(self):
+        return self.__str__()
