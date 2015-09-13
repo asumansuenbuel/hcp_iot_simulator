@@ -516,6 +516,9 @@ class Thread:
         else:
             self.info("[" + self.idstr + "] message to dummy: " + (' '.join(msg.split('\n'))))
         self.__messageCounter__ += 1
+        if self.__timer__ == None:
+            self.info("[" + self.idstr + "] no new cycle started, because simulation has been stopped")
+            return
         self.__timer__ = threading.Timer(device.frequencyInSeconds,Thread.startGenerateHCPMessageThread,[self,device.frequencyInSeconds,dummyMode])
         self.__timer__.start()
     
@@ -526,7 +529,9 @@ class Thread:
         self.__lastFrequencyInSeconds__ = frequencyInSeconds
         #self.__timer__ = threading.Timer(frequencyInSeconds,Sensor.nextValue,[self])
         #self.__timer__.start()
-        self.startGenerateHCPMessageThread(frequencyInSeconds,dummyMode);
+        self.__timer__ = threading.Timer(0,Thread.startGenerateHCPMessageThread,[self,self.device.frequencyInSeconds,dummyMode])
+        self.__timer__.start()
+        #self.startGenerateHCPMessageThread(frequencyInSeconds,dummyMode);
 
     def stop(self,paused=False,reset=False):
         if self.__timer__ != None:

@@ -482,6 +482,9 @@ class DeviceUI(Device):
 
     def info(self,message):
         #print("info: " + message)
-        self.outputText.insert(END,message + "\n")
-        self.outputText.see(END)
+        try:
+            self.outputText.insert(END,message + "\n")
+            self.outputText.see(END)
+        except:
+            pass
 
