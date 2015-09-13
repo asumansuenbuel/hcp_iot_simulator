@@ -120,10 +120,10 @@ class SimulatorUI(Simulator):
 
     def _openOrFocusDeviceWindow(self,d):
         if d.hasWindowOpen():
-            print "Device " + d.name + ": open"
+            #print "Device " + d.name + ": open"
             d.__parent__.wm_attributes("-topmost", 1)
         else:
-            print "Device " + d.name + ": closed"
+            #print "Device " + d.name + ": closed"
             try:
                 d.openAsToplevel(self)
             except Exception as e:

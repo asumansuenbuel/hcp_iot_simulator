@@ -1,0 +1,55 @@
+createSimulator(
+  name = stringUnescape("MySimulator"),
+  devices = [
+      createDevice(
+        uuid = "fa847c1c-57f9-11e5-a992-60f81dcc03d6",
+        name = stringUnescape("Raspberry"),
+        sensors = [
+            createSensor(
+              name = stringUnescape("Temperature"),
+              unitName = stringUnescape("C"),
+              isFloat = False,
+              minValue = 10.0,
+              maxValue = 50.0,
+              varianceSeconds = 60.0,
+              varianceValue = 1.0,
+              ndigitsAfterDecimalPoint = 2,
+              description = stringUnescape("")
+            ),
+            createSensor(
+              name = stringUnescape("Humidity"),
+              unitName = stringUnescape("%25"),
+              isFloat = False,
+              minValue = 20,
+              maxValue = 60,
+              startValue = 25,
+              varianceSeconds = 60,
+              varianceValue = 1,
+              ndigitsAfterDecimalPoint = 2,
+              description = stringUnescape("")
+            )      
+  ],
+        instanceCount = 10,
+        hcpDeviceId = "e071373c-95cd-41cc-ae29-08013948a60e",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 5,
+        description = stringUnescape("")
+      ),
+      createDevice(
+        uuid = "cd554d51-585d-11e5-a0fd-60f81dcc03d6",
+        name = stringUnescape("GenericSensorDevice"),
+        sensors = [
+      
+  ],
+        instanceCount = 1,
+        hcpDeviceId = "e071373c-95cd-41cc-ae29-08013948a60e",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 10,
+        description = stringUnescape("")
+      )
+  ]
+)
