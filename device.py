@@ -7,6 +7,8 @@
 import time, threading, random, json, sys, urllib3, os
 import uuid as uuidlib
 from string import Template
+from actuator import *
+import actuator_config
 from sim_utils import *
 
 sys.path.insert(0,os.getcwd())
@@ -237,7 +239,9 @@ class Device(FilePersistedObject):
                  hcpDeviceId=config.hcp_device_id,
                  hcpOauthCredentials=config.hcp_oauth_credentials,
                  messageTypeId=config.hcp_message_type_id_from_device,
+                 messageTypeIdToDevice=config.hcp_message_type_id_to_device,
                  sensors=[],
+                 actuators=[],
                  frequencyInSeconds=10,
                  messageFormat='default',
                  description="",
@@ -245,9 +249,11 @@ class Device(FilePersistedObject):
                  uuid = None):
         self.name = name
         self.sensors=sensors
+        self.actuators=actuators
         self.hcpDeviceId = hcpDeviceId
         self.hcpOauthCredentials = hcpOauthCredentials
         self.messageTypeId = messageTypeId
+        self.messageTypeIdToDevice = messageTypeIdToDevice
         self.messageFormat = messageFormat
         self.frequencyInSeconds = frequencyInSeconds
         self.description = description
@@ -265,7 +271,7 @@ class Device(FilePersistedObject):
 
     def addSensor(self,sensor):
         if not isinstance(sensor,Sensor):
-            raise Exception("only objects of type Sensor can be added to a device")
+            raise Exception("only objects of type Sensor can be added here")
         for s in self.sensors:
             if s.name == sensor.name:
                 raise Exception("you cannot add a sensor with already existing name '" + sensor.name + "' to device '" + self.name + "'.")
@@ -285,6 +291,29 @@ class Device(FilePersistedObject):
                 return s
         return None
 
+
+    @property
+    def availableActuators(self):
+        anames = list(actuator_config.actuatorNames)
+        for act in self.actuators:
+            try:
+                anames.remove(act)
+            except:
+                pass
+        return anames
+
+    def addActuator(self,aname):
+        if not actuator_config.actuatorConstructors.has_key(aname):
+            raise Exception('Actuator "' + aname + '" is not defined in the system.')
+        alreadyContained = False
+        try:
+            self.actuators.index(aname)
+            alreadyContained = True
+        except:
+            self.actuators.append(aname)
+        if alreadyContained:
+            raise Exception('Actuator "' + aname + '" is already part of this device.')
+    
     def getDefaultMessageFormat(self):
         msgs = '['
         sep = ""
@@ -293,7 +322,8 @@ class Device(FilePersistedObject):
             msg += '  "sensor" : "' + s.name + '",\n'
             msg += '  "value" : "$' + s.name + '_value",\n'
             msg += '  "timestamp" : $timestamp,\n'
-            msg += '  "deviceid" : "$deviceid"\n'
+            msg += '  "deviceid" : "$deviceid",\n'
+            msg += '  "devicename" : "$devicename"\n'
             msg += '}'
             msgs += sep + msg
             sep = ",\n"
@@ -311,6 +341,9 @@ class Device(FilePersistedObject):
             if thread.threadIsRunning():
                 return True
         return False
+
+    def dummyStart(self,frequencyInSeconds=5):
+        self.start(frequencyInSeconds=frequencyInSeconds,dummyMode=True)
     
     # starts simulating values using the given frequency
     def start(self,frequencyInSeconds,dummyMode=False):
@@ -378,6 +411,7 @@ class Device(FilePersistedObject):
         s += indent + '  hcpDeviceId = "' + self.hcpDeviceId + '",\n'
         s += indent + '  hcpOauthCredentials = "' + self.hcpOauthCredentials + '",\n'
         s += indent + '  messageTypeId = "' + self.messageTypeId + '",\n'
+        s += indent + '  messageTypeIdToDevice = "' + self.messageTypeIdToDevice + '",\n'
         s += indent + '  messageFormat = stringUnescape("' + stringEscape(self.messageFormat) + '"),\n'
         s += indent + '  frequencyInSeconds = ' + str(self.frequencyInSeconds) + ',\n'
         s += indent + '  description = stringUnescape("' + stringEscape(self.description) + '")\n'
@@ -496,7 +530,8 @@ class Thread:
         msgTemplate = Template(msg)
         ts = int(time.time())
         evalStr = 'msgTemplate.safe_substitute(timestamp=ts,'
-        evalStr += 'deviceid="' + self.uuid + '"'
+        evalStr += 'deviceid="' + self.uuid + '",'
+        evalStr += 'devicename="' + self.device.name + '-' + self.idstr + '"'
         for s in device.sensors:
             varname = s.name + '_value'
             valueInfo = s.nextValue(timestamp = ts,lastValue=self.__lastValue__,lastTimestamp=self.__lastTimestamp__,dummyMode=dummyMode);

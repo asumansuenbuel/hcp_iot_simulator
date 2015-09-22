@@ -132,6 +132,7 @@ class DeviceUI(Device):
         addStringVar(self,'hcpDeviceId','HCP Device Id')
         addStringVar(self,'hcpOauthCredentials','HCP OAuth Credentials')
         addStringVar(self,'messageTypeId','HCP Message Type Id (From Device)')
+        addStringVar(self,'messageTypeIdToDevice','HCP Message Type Id (To Device)')
         addStringVar(self,'frequencyInSeconds','Message frequency (seconds)',valueType='int')
         instanceCountStringVar = addStringVar(self,'instanceCount','Number of instances in Simulator',valueType='int')
         instanceCountStringVar.trace("w",self._updateInstanceCountFromStringVar)
@@ -194,6 +195,8 @@ class DeviceUI(Device):
         createStringInput(self,'hcpOauthCredentials',inputFields,rowcnt)
         rowcnt += 1
         createStringInput(self,'messageTypeId',inputFields,rowcnt)
+        rowcnt += 1
+        createStringInput(self,'messageTypeIdToDevice',inputFields,rowcnt)
         rowcnt += 1
 
         inputFields.pack(anchor=W,expand=True)
