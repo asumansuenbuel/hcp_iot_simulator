@@ -99,6 +99,7 @@ class Sensor(FilePersistedObject):
             return random.randint(min,max)
         
     def nextValue(self,timestamp = None,lastValue=None,lastTimestamp=None,dummyMode=False):
+        #print "\nSensor: " + self.name
         ts = int(time.time()) if timestamp == None else timestamp
         realValueMode = self.isRealSensor
         if realValueMode:

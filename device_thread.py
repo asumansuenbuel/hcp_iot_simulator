@@ -41,10 +41,18 @@ class DeviceThread:
 
     def reset(self):
         self.__timer__ = None
-        self.__lastValue__ = None
-        self.__lastTimestamp__ = None
+        self.resetLastValuesAndTimestamps()
+        #self.__lastValue__ = None
+        #self.__lastTimestamp__ = None
         self.__messageCounter__ = 0
 
+    def resetLastValuesAndTimestamps(self):
+        self.lastValues = []
+        self.lastTimestamps = []
+        for i in range(len(self.device.sensors)):
+            self.lastValues.append(None)
+            self.lastTimestamps.append(None)
+        
     def send_to_hcp(self,message):
         device = self.device
         debug_communication = 0
@@ -89,14 +97,20 @@ class DeviceThread:
         evalStr = 'msgTemplate.safe_substitute(timestamp=ts,'
         evalStr += 'deviceid="' + self.uuid + '",'
         evalStr += 'devicename="' + self.device.name + '-' + self.idstr + '"'
+        scnt = 0
         for s in device.sensors:
             varname = s.name + '_value'
-            valueInfo = s.nextValue(timestamp = ts,lastValue=self.__lastValue__,lastTimestamp=self.__lastTimestamp__,dummyMode=dummyMode);
+            lval = self.lastValues[scnt]
+            lts = self.lastTimestamps[scnt]
+            valueInfo = s.nextValue(timestamp = ts,lastValue=lval,lastTimestamp=lts,dummyMode=dummyMode);
             value = valueInfo['value']
             if not dummyMode:
-                self.__lastValue__ = valueInfo['lastValue']
-                self.__lastTimestamp__ = valueInfo['lastTimestamp']
+                #self.__lastValue__ = valueInfo['lastValue']
+                #self.__lastTimestamp__ = valueInfo['lastTimestamp']
+                self.lastValues[scnt] = valueInfo['lastValue']
+                self.lastTimestamps[scnt] = valueInfo['lastTimestamp']
             evalStr += ',' + varname + '=' + str(value)
+            scnt += 1
         evalStr += ')'
         return eval(evalStr)
 
@@ -131,8 +145,9 @@ class DeviceThread:
             self.__timer__ = None
             self.info("[" + self.idstr + "] simulation " + ("paused" if paused else "stopped") + ".")
         if not paused:
-            self.__lastTimestamp__ = None
-            self.__lastValue__ = None
+            #self.__lastTimestamp__ = None
+            #self.__lastValue__ = None
+            self.resetLastValuesAndTimestamps()
             if reset:
                 self.reset()
 
