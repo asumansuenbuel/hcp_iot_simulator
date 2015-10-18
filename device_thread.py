@@ -158,7 +158,7 @@ class DeviceThread:
         return self.__timer__ != None
 
     def threadIsInUse(self):
-        return self.__timer__ != None or self.__lastTimestamp__ != None
+        return self.__timer__ != None
 
     @property
     def messageCount(self):
