@@ -70,7 +70,8 @@ class Sensor(FilePersistedObject):
                  varianceSeconds=1,
                  varianceValue=1,
                  ndigitsAfterDecimalPoint=2,
-                 description=""
+                 description="",
+                 isRealSensor=False
              ):
         self.name = name
         self.unitName = unitName
@@ -84,6 +85,7 @@ class Sensor(FilePersistedObject):
         self.ndigitsAfterDecimalPoint = ndigitsAfterDecimalPoint
         self.description = description
         self.device = None
+        self.isRealSensor = isRealSensor
         # internal fields:
         self.validate()
         self.initFilePersistence('sensor')
@@ -98,7 +100,11 @@ class Sensor(FilePersistedObject):
         
     def nextValue(self,timestamp = None,lastValue=None,lastTimestamp=None,dummyMode=False):
         ts = int(time.time()) if timestamp == None else timestamp
-        if dummyMode:
+        realValueMode = self.isRealSensor
+        if realValueMode:
+            value = self.getRealValue()
+            print 'real value for sensor "' + self.name + '" = ' + str(value)
+        elif dummyMode:
             value = self.getRandomValueInRange()
         else:
             if lastValue == None:
@@ -139,15 +145,24 @@ class Sensor(FilePersistedObject):
             value = int(round(value))
 
         nextLastTimestamp = ts
-        if not dummyMode:
-            res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
+        if dummyMode or realValueMode:
+            res = {'value' : value, 'timestamp' : ts, 'lastValue' : None, 'lastTimestamp' : None}
         else:
-            res = {'value' : value, 'timestamp' : ts}
+            res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
         return res
+
+    def getRealValue(self):
+        if self.device.url != None:
+            svalues = self.device._getSensorValues()
+            print str(svalues)
+            return svalues[self.name]
+        raise Exception("getRealValue called on simulated sensor '" + self.name + "'")
 
     def validate(self):        
         if self.name == None or len(self.name) == 0:
             raise Exception("sensor name must not be empty")
+        if self.isRealSensor:
+            return
         if not self.minValue < self.maxValue:
             raise Exception("minValue must be less than maxValue")
         if self.startValue != None:
@@ -163,15 +178,27 @@ class Sensor(FilePersistedObject):
     def __str__(self,indent=''):
         s = indent
         s += "Sensor '" + self.name + "', unit: " + self.unitName
-        s += ", minValue: " + str(self.minValue)
-        s += ", minValue: " + str(self.maxValue)
-        s += ", startValue: " + str(self.startValue)
-        s += ", variance: " + str(self.varianceValue) + " in " + str(self.varianceSeconds) + " seconds"
+        if self.isRealSensor:
+            s += ", isRealSensor: " + str(self.isRealSensor)
+        else:
+            s += ", minValue: " + str(self.minValue)
+            s += ", minValue: " + str(self.maxValue)
+            s += ", startValue: " + str(self.startValue)
+            s += ", variance: " + str(self.varianceValue) + " in " + str(self.varianceSeconds) + " seconds"
         return s
 
     def __repr__(self):
         return self.__str__()
 
+
+    def toJson(self):
+        obj = {'kind':'sensor','name':self.name,'unitName':self.unitName,'isRealSensor':self.isRealSensor}
+        if not (self.isRealSensor):
+            for prop in ['isFloat','minValue','maxValue','startValue','varianceSeconds','varianceValue','ndigitsAfterDecimalPoint']:
+                val = getattr(self,prop)
+                obj[prop] = val
+        return obj
+    
     def getPythonConstructorString(self,indent="",standalone=False):
         s = ''
         s += indent + 'createSensor(\n'
@@ -180,6 +207,7 @@ class Sensor(FilePersistedObject):
         s += indent + '  isFloat = ' + str(self.isFloat) + ',\n'
         s += indent + '  minValue = ' + str(self.minValue) + ',\n'
         s += indent + '  maxValue = ' + str(self.maxValue) + ',\n'
+        s += indent + '  isRealSensor = ' + str(self.isRealSensor) + ',\n'
         if self.startValue != None:
             s += indent + '  startValue = ' + str(self.startValue) + ',\n'
         s += indent + '  varianceSeconds = ' + str(self.varianceSeconds) + ',\n'

@@ -1,122 +1,28 @@
-# Simular Device and Sensor UI
+# Simulator Device UI
 # 
 # Author: Asuman Suenbuel
 # (c) 2015
 #
 
+from device import *
+from sensor_ui import *
+
 from Tkinter import *
 import tkMessageBox as messageBox
 from tkFileDialog import askopenfilename
-from device import *
+
+from device_ui_dialogs import *
+
 from sim_utils import *
+import resources
 import json,time
+
+
 # --------------------------------------------------------------------------------
 def createDevice(*args,**kwargs):
     if 'filename' in kwargs:
         return Device.createFromFile(kwargs['filename'])
     return DeviceUI(*args,**kwargs)
-
-def createSensor(*args,**kwargs):
-    if 'filename' in kwargs:
-        return Sensor.createFromFile(kwargs['filename'])
-    return SensorUI(*args,**kwargs)
-# --------------------------------------------------------------------------------
-
-class SensorUI(Sensor):
-
-    
-    def initStringVars(self):
-        addStringVar(self,'name','Name')
-        addStringVar(self,'unitName','Unit')
-        addStringVar(self,'minValue','From',valueType='float')
-        addStringVar(self,'maxValue','To',valueType='float')
-        addStringVar(self,'startValue','Start Value',valueType='float')
-        addStringVar(self,'varianceSeconds','During this many seconds',valueType='float')
-        addStringVar(self,'varianceValue','the maximal difference of sensor values is',valueType='float')
-        self.valueType = "Float" if self.isFloat else "Integer"
-        addStringVar(self,'valueType','Value Type',values = ['Float','Integer'])
-        addStringVar(self,'ndigitsAfterDecimalPoint','#Digits after decimal point',valueType='int')
-
-    def buildUI(self,master):
-        self.initStringVars()
-        outerframe = Frame(master=master)
-        f = Frame(outerframe)
-
-        inputFields = Frame(f)
-        rowcnt = 0
-        createStringInput(self,'name',inputFields,rowcnt)
-        rowcnt += 1
-        createStringInput(self,'unitName',inputFields,rowcnt)
-        rowcnt += 1
-        inputFields.pack(anchor=W,expand=True)
-
-        typeFrame = Frame(f)
-        createStringInput(self,'valueType',typeFrame,0)
-        typeFrame.pack(anchor=W)
-        self.digitsFrame = Frame(f)
-        createStringInput(self,'ndigitsAfterDecimalPoint',self.digitsFrame,row=0,width=6)
-        self.digitsFrame.pack(anchor=W)
-        
-        
-
-        valueRangeFrame = Frame(f,bd=1,relief=SUNKEN)
-        Label(valueRangeFrame,text="Value Range",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
-        createStringInput(self,'minValue',valueRangeFrame,row=1,column=0,width=10)
-        createStringInput(self,'maxValue',valueRangeFrame,row=1,column=2,width=10)
-        createStringInput(self,'startValue',valueRangeFrame,row=2,width=10)
-        valueRangeFrame.pack(fill=X,padx=5,pady=5)
-
-        varianceFrame = Frame(f,bd=1,relief=SUNKEN)
-        Label(varianceFrame,text="Variance (how quickly the sensor values change)",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
-        createStringInput(self,'varianceSeconds',varianceFrame,row=1,column=0,width=10)
-        createStringInput(self,'varianceValue',varianceFrame,row=2,column=0,width=10)
-        varianceFrame.pack(fill=X,padx=5,pady=5)
-
-        buttonsFrame = Frame(f)
-        Button(buttonsFrame,text = "Apply", command = lambda : self.applyUI(master)).grid(row=0,column=0,sticky=W)
-        if self.device != None:
-            Button(buttonsFrame,text = "Remove from device", command = lambda : self.removeUI(master)).grid(row=0,column=1,sticky=W)
-        Button(buttonsFrame,text = "Cancel", command = lambda : self.closeUI(master)).grid(row=0,column=2,sticky=E)
-        buttonsFrame.pack(fill=X,padx=5,pady=5,expand=1)
-
-        f.pack(fill=BOTH,padx=10,pady=10,expand=1);
-        outerframe.pack(fill=BOTH,expand=1)
-        master.title("Sensor \"" + self.name + "\"")
-
-    def openAsToplevel(self):
-        top = Toplevel()
-        top.appObject = self
-        self.buildUI(master = top)
-        #self.__root__.wait_window(top)
-                   
-    def buildFrameInDeviceUI(self,sensorsFrame,rowcnt):
-        b = Button(sensorsFrame,text=self.name,bg="lightblue",width=25)
-        b.grid(row=rowcnt,column=0,sticky=W)
-        b['command'] = self.openAsToplevel
-
-    def applyUI(self,top):
-        for field in self.stringVars.keys():
-            updateValueFromStringVar(self,field)
-        #special case:
-        self.isFloat = self.valueType == 'Float'
-
-        saveToFileUI(self)
-        if self.device != None:
-            self.device.updateSensorsFrame()
-        self.closeUI(top)
-
-    def removeUI(self,top):
-        title = "Remove sensor?"
-        msg = "Do you really want to remove this sensor from the device?"
-        if messageBox.askyesno(title,msg):
-            self.device.removeSensor(self)
-            self.device.updateSensorsFrame()
-            self.closeUI(top)
-    
-    def closeUI(self,top):
-        top.destroy()
-
-
 # --------------------------------------------------------------------------------
 
 class DeviceUI(Device):
@@ -124,9 +30,9 @@ class DeviceUI(Device):
     def __init__(self,*args,**kwargs):
         Device.__init__(self,*args,**kwargs)
         self.initStringVars()
-
-    
+        
     def initStringVars(self):
+        addStringVar(self,'url','Url')
         addStringVar(self,'uuid','Id')
         addStringVar(self,'name','Name')
         addStringVar(self,'hcpDeviceId','HCP Device Id')
@@ -134,12 +40,20 @@ class DeviceUI(Device):
         addStringVar(self,'messageTypeId','HCP Message Type Id (From Device)')
         addStringVar(self,'messageTypeIdToDevice','HCP Message Type Id (To Device)')
         addStringVar(self,'frequencyInSeconds','Message frequency (seconds)',valueType='int')
+        pollingFrequencyVar = addStringVar(self,'pollingFrequency','Polling Frequency',valueType='float')
         instanceCountStringVar = addStringVar(self,'instanceCount','Number of instances in Simulator',valueType='int')
         instanceCountStringVar.trace("w",self._updateInstanceCountFromStringVar)
         instanceCountStringVar.set(int(self.instanceCount))
         self.simulationDummyModeSV = IntVar()
         self.simulationDummyModeSV.set(1)
+        # the selectedActuator string var is used in the drop-down for adding actuators:
+        self.selectedActuator = None
+        selectedActuatorSV = addStringVar(self,'selectedActuator','',values=self.availableActuatorNames)
+        pollingFrequencyVar.trace("w",self._updatePollingFrequencyFromStringVar)
 
+    def createSensor(self,*args,**kwargs):
+        return SensorUI(*args,**kwargs)
+        
     def _setMessageFormatFromSV(self,*args):
         print "args in _setMessageFormatFromSV: " + str(args)
 
@@ -152,20 +66,31 @@ class DeviceUI(Device):
         self.instanceCount = num
         #print "instanceCount updated: " + str(self.instanceCount)
 
+    def _updatePollingFrequencyFromStringVar(self,*args):
+        sv = getStringVarForField(self,'pollingFrequency')
+        try:
+            num = float(sv.get())
+            self.pollingFrequency = num
+            self.info("polling frequency set to " + str(num) + " second(s).")
+        except ValueError:
+            pass
+
     def debug(self):
         print 'showing values of stringVars:'
         for field in self.stringVars.keys():
             obj = self.stringVars[field]
             print field + ": " + obj['stringVar'].get()
 
-    def updateControlButtons(self):
+    def updateControlButtons(self,threadsAreRunning=None):
         if len(self.sensors) == 0:
             self.startButton.config(state=DISABLED)
             self.pauseButton.config(state=DISABLED)
             self.stopButton.config(state=DISABLED)
             return
 
-        if self.threadsAreRunning():
+        threadsAreRunning = self.threadsAreRunning() if threadsAreRunning == None else threadsAreRunning
+        
+        if threadsAreRunning:
             self.startButton.config(state=DISABLED)
             self.pauseButton.config(state=ACTIVE)
             self.stopButton.config(state=ACTIVE)
@@ -179,46 +104,74 @@ class DeviceUI(Device):
         #self.initStringVars()
         outerframe = Frame(master=master)
         f = Frame(outerframe)
+        if self.isRealDevice:
+            labelFrame = Frame(f)
+            Label(labelFrame,text="This is a real device.",font="-weight bold",background="yellow").pack()
+            labelFrame.pack()
         inputFields = Frame(f)
         rowcnt = 0
+        if self.url != None:
+            entry = createStringInput(self,'url',inputFields,rowcnt)
+            entry.config(state=DISABLED)
+            rowcnt += 1
         vv = self.stringVars['uuid']['stringVar']
         Label(inputFields,text = "Id:").grid(row=rowcnt, sticky=W)
-        rowcnt += 1
         idEntry = Entry(inputFields,width=40,textvariable=vv)
-        idEntry.grid(row=0,column=1,sticky=W)
+        idEntry.grid(row=rowcnt,column=1,sticky=W)
         #idEntry.insert(0,self.uuid)
         idEntry.config(state=DISABLED)
+        rowcnt += 1
         createStringInput(self,'name',inputFields,rowcnt)
         rowcnt += 1
-        createStringInput(self,'hcpDeviceId',inputFields,rowcnt)
-        rowcnt += 1
-        createStringInput(self,'hcpOauthCredentials',inputFields,rowcnt)
-        rowcnt += 1
-        createStringInput(self,'messageTypeId',inputFields,rowcnt)
-        rowcnt += 1
-        createStringInput(self,'messageTypeIdToDevice',inputFields,rowcnt)
-        rowcnt += 1
+        
+        #createStringInput(self,'hcpDeviceId',inputFields,rowcnt)
+        #rowcnt += 1
+        #createStringInput(self,'hcpOauthCredentials',inputFields,rowcnt)
+        #rowcnt += 1
+        #createStringInput(self,'messageTypeId',inputFields,rowcnt)
+        #rowcnt += 1
+        #createStringInput(self,'messageTypeIdToDevice',inputFields,rowcnt)
+        #rowcnt += 1
 
+        Button(inputFields,text="Show/Edit HCP Parameters",command=lambda : HCPParametersDialog.open(self)).grid(row=rowcnt)
+        
         inputFields.pack(anchor=W,expand=True)
 
         sensorsOuterFrame = Frame(f,relief=SUNKEN,bd=1)
         rowcnt = 0
         Label(sensorsOuterFrame,text="Onboard Sensors",font="-weight bold").grid(row=rowcnt,sticky=W)
-        rowcnt += 1
-        self.sensorsFrame = Frame(sensorsOuterFrame)
-        self.sensorsFrame.grid(row=rowcnt,columnspan=2,pady=5,sticky=W)
-        rowcnt += 1
-        addSensorButton = Button(sensorsOuterFrame,text="Add New Sensor",command=self.addSensorUI)
-        addSensorButton.grid(row=rowcnt,sticky=W,pady=10)
-        loadSensorButton = Button(sensorsOuterFrame,text="Add Sensor From File",command=self.addSensorFromFileUI)
-        loadSensorButton.grid(row=rowcnt,column=1,sticky=W,pady=10)
+        Button(sensorsOuterFrame,text="Show/Edit Sensors",command=lambda : SensorsDialog.open(self)).grid(row=rowcnt,column=1,sticky=E)
+        if False:
+            rowcnt += 1
+            self.sensorsFrame = Frame(sensorsOuterFrame)
+            self.sensorsFrame.grid(row=rowcnt,columnspan=2,pady=5,sticky=W)
+            rowcnt += 1
+            addSensorButton = Button(sensorsOuterFrame,text="Add New Sensor",command=self.addSensorUI)
+            addSensorButton.grid(row=rowcnt,sticky=W,pady=10)
+            loadSensorButton = Button(sensorsOuterFrame,text="Add Sensor From File",command=self.addSensorFromFileUI)
+            loadSensorButton.grid(row=rowcnt,column=1,sticky=W,pady=10)
         sensorsOuterFrame.pack(padx=5,pady=5,fill=X)
 
+        # ----------------------------------------
+        actuatorsOuterFrame = Frame(f,relief=SUNKEN,bd=1)
+        Label(actuatorsOuterFrame,text="Actuators",font="-weight bold").pack(anchor=W)
+        self.actuatorsFrame = Frame(actuatorsOuterFrame)
+        self.actuatorsFrame.pack(fill=X,expand=1)
+
+        if not self.isRealDevice:
+            addActuatorFrame = Frame(actuatorsOuterFrame)
+            createStringInput(self,'selectedActuator',addActuatorFrame,label="Select Actuator",row=0)
+            Button(addActuatorFrame,text="Add Selected Actuator",command=self._addSelectedActuator).grid(row=0,column=3)
+            addActuatorFrame.pack(anchor=W)
+
+        actuatorsOuterFrame.pack(padx=5,pady=5,fill=X)
+        # ----------------------------------------
+        
         messageFormatFrame = Frame(f,relief=SUNKEN,bd=1)
         rowcnt = 0
-        Label(messageFormatFrame,text="Message Format",font="-weight bold").pack(anchor=W)
+        Label(messageFormatFrame,text="Message Format",font="-weight bold").pack(anchor=NW,side=LEFT)
         self.editMessageFormatButton = Button(messageFormatFrame,text = 'Show/Edit',command = self._editMessageFormatHandler)
-        self.editMessageFormatButton.pack(anchor=W)
+        self.editMessageFormatButton.pack(anchor=NW,side=LEFT)
 
         self.messageFormatEditorFrame = Frame(messageFormatFrame)
         mframe = Frame(self.messageFormatEditorFrame,bd=2,relief=SUNKEN)
@@ -239,7 +192,11 @@ class DeviceUI(Device):
         
         controls = Frame(f,relief=SUNKEN,bd=1)
 
-        Label(controls,text="Simulation Controls",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
+        tc = Frame(controls)
+        Label(tc,text="Send Sensor Readings to HCP",font="-weight bold").grid(row=0,sticky=W)
+        Button(tc,text="Show/Edit Simulation Parameters",
+               command=lambda : SimulationParametersDialog.open(self)).grid(row=0,column=1,sticky=W)
+        tc.grid(row=0,columnspan=4,sticky=W)
 
         freqFrame = Frame(controls)
         rowcnt1 = 0
@@ -247,26 +204,35 @@ class DeviceUI(Device):
             createStringInput(self,'instanceCount',freqFrame,row=rowcnt1,width = 6)
             rowcnt1 += 1
         createStringInput(self,'frequencyInSeconds',freqFrame,row=rowcnt1,width = 6)
-        freqFrame.grid(row=1,columnspan=3)
+        #freqFrame.grid(row=1,columnspan=3,sticky=W)
         
         self.startButton = Button(controls,text="Start",bg="grey")
-        self.startButton.grid(row=2,column=0)
+        self.startButton.grid(row=2,column=0,sticky=W)
         self.startButton['command'] = self._startSimulationFromUI
 
         self.pauseButton = Button(controls,text="Pause",bg="grey")
-        self.pauseButton.grid(row=2,column=1)
+        self.pauseButton.grid(row=2,column=1,sticky=W)
         self.pauseButton['command'] = self._pauseSimulationFromUI
 
         self.stopButton = Button(controls,text="Stop")
-        self.stopButton.grid(row=2,column=2)
+        self.stopButton.grid(row=2,column=2,sticky=W)
         self.stopButton.config(bg="Red")
         self.stopButton['command'] = self._stopSimulationFromUI
 
         dummyModeCheckButton = Checkbutton(controls,text="Dummy Mode (don't send anything to HCP)",variable=self.simulationDummyModeSV)
-        dummyModeCheckButton.grid(row=2,column=3)
+        dummyModeCheckButton.grid(row=2,column=3,sticky=W)
         
         controls.pack(padx=5,pady=5,fill=X)
 
+        pollingFrame = Frame(f,relief=SUNKEN,bd=1)
+        Label(pollingFrame,text="Poll From HCP",font="-weight bold").grid(row=0,sticky=W)
+        self.pollingControlButton = Button(pollingFrame,text="Start/Stop",command=self._togglePolling)
+        self.pollingControlButton.grid(row=0,column=1,sticky=E)
+        createStringInput(self,'pollingFrequency',pollingFrame,row=0,column=2,width=3)
+        self.pollingStatusLabel = Label(pollingFrame,text="status: unknown")
+        self.pollingStatusLabel.grid(row=0,column=4)
+        pollingFrame.pack(padx=5,pady=5,fill=X)
+        
         outputFrame = Frame(f)
         outputTitleFrame = Frame(outputFrame)
         l = Label(outputTitleFrame,text="Output",font="-weight bold")
@@ -280,6 +246,9 @@ class DeviceUI(Device):
         xsb = Scrollbar(oframe, orient=HORIZONTAL)
         ysb = Scrollbar(oframe, orient=VERTICAL)
         self.outputText = Text(oframe,xscrollcommand=xsb.set,yscrollcommand=ysb.set,height=10,width=80,wrap=NONE)
+        self.outputText.tag_config("blue", foreground="blue")
+        self.outputText.tag_config("green", foreground="green")
+        self.outputText.tag_config("error", foreground="red")
         xsb.pack(side=BOTTOM, fill=X)
         self.outputText.pack(side=LEFT,fill=BOTH,expand=1)
         xsb.config(command=self.outputText.xview)
@@ -291,7 +260,7 @@ class DeviceUI(Device):
         
         buttonsFrame = Frame(f)
         Button(buttonsFrame,text = "Apply", command = self.applyUI).grid(row=0,column=0,sticky=W)
-        if self.simulator != None:
+        if self.simulator != None and (not self.isRealDevice):
             Button(buttonsFrame,text = "Remove from simulator", command = lambda : self.removeUI(master)).grid(row=0,column=1,sticky=W)
         Button(buttonsFrame,text = "Close", command = lambda : self.closeUI(master)).grid(row=0,column=2,sticky=E)
         buttonsFrame.pack(fill=X,padx=5,pady=5,expand=1)
@@ -301,7 +270,9 @@ class DeviceUI(Device):
         master.title('Device "' + self.name + '"')
         self.__parent__ = master
         self.updateControlButtons()
-        self.updateSensorsFrame()
+        #self.updateSensorsFrame()
+        self.updateActuatorsFrame()
+        self._updatePollingControlButtonText()
         return f
 
     def _clearOutput(self):
@@ -337,7 +308,7 @@ class DeviceUI(Device):
 
     def _testMessageFormat(self):
         text = self.messageFormatEditor.get('1.0',END)
-        msg = Thread(self).generateHCPMessage(messageFormat=text,dummyMode=True)
+        msg = DeviceThread(self).generateHCPMessage(messageFormat=text,dummyMode=True)
         self.info("generated example message:")
         self.info(msg)
         infomsg = "Message format check succeeded."
@@ -360,12 +331,106 @@ class DeviceUI(Device):
         else:
             self.messageFormatEditorFrame.pack_forget()
             b['text'] = "Show/Edit"
-        
 
+    def _addSelectedActuator(self):
+        sv = getStringVarForField(self,'selectedActuator')
+        aname = sv.get()
+        if aname == '':
+            return
+        aid = Actuator.getIdForName(aname)
+        if aid == None:
+            self.info('couldn\'t add actuator named "' + aname + "'; no id found. Something's gone wrong...")
+            return
+        self.info('adding actuator with id "' + aid + '"...')
+        try:
+            self.addActuatorId(aid)
+            self.updateActuatorsFrame()
+        except Exception as e:
+            messageBox.showerror("Error adding actuator",str(e))
+
+    def updateActuatorsFrame(self):
+        aframe = self.actuatorsFrame
+        for w in aframe.winfo_children():
+            w.destroy()
+        rowcnt = 0
+        self._updateActuatorObjects()
+        for aobj in self.actuatorObjects:
+            # placeholder
+            f = Frame(aframe,relief='sunken',bd=1)
+            Label(f,text=aobj.name,width=30).pack(side='left')
+            actframe = Frame(f)
+            try:
+                aobj.initUI(actframe)
+            except:
+                pass
+            actframe.pack(side='left')
+            if not self.isRealDevice:
+                Button(f,image=resources.getImage('trashCan'),command=aobj.removeFromDevice).pack(side='right')
+            f.pack(fill=BOTH,padx=3,pady=3,expand=1)
+            rowcnt += 1
+
+        updateOptionMenuValues(self,'selectedActuator',self.availableActuatorNames)
+        sv = getStringVarForField(self,'selectedActuator')
+        sv.set('')
+        
+    def _removeActuator(self,id):
+        self.info("removing actuator " + id)
+
+    def _processPollInfoData(self,data):
+        Device._processPollInfoData(self,data)
+        threadsAreRunningNow = data['threadsAreRunning']
+        self.updateControlButtons(threadsAreRunning=threadsAreRunningNow)
+        #if not hasattr(self,'threadsWereRunningBefore'):
+        #    self.threadsWereRunningBefore = not threadsAreRunningNow
+        #if threadsAreRunningNow != self.threadsWereRunningBefore:
+        #    self.updateControlButtons(threadsAreRunning=threadsAreRunningNow)
+        #    self.threadsWereRunningBefore = threadsAreRunningNow
+
+    def startPolling(self):
+        Device.startPolling(self)
+        try:
+            self._updatePollingControlButtonText(pollingIsRunning=False)
+        except:
+            pass
+
+    def stopPolling(self,quiet=True):
+        Device.stopPolling(self,quiet=False)
+        try:
+            self._updatePollingControlButtonText(pollingIsRunning=False)
+        except:
+            pass
+        
+    def _togglePolling(self):
+        action = self.togglePolling()
+
+    def _updatePollingControlButtonText(self,pollingIsRunning=None):
+        pollingIsRunning = pollingIsRunning if pollingIsRunning == None else self.pollingIsRunning
+        btext = "Start"
+        ltext = "status: stopped"
+        if pollingIsRunning:
+            btext = "Stop"
+            ltext = "status: running"
+        self.pollingControlButton.config(text=btext)
+        self.pollingStatusLabel.config(text=ltext)
+
+    def _processPollInfoData(self,data):
+        Device._processPollInfoData(self,data)
+        pir = data['pollingisrunning']
+        self._updatePollingControlButtonText(pollingIsRunning=pir)
+        
     def buildFrameInSimulatorUI(self,devicesFrame,rowcnt):
-        b = Button(devicesFrame,text=self.name,bg="lightblue",width=25)
+        b = Button(devicesFrame,text=self.name,width=25,textvariable=getStringVarForField(self,'name'))
         b.grid(row=rowcnt,column=0,sticky=W)
-        createStringInput(self,'instanceCount',devicesFrame,rowcnt,column=1,width=8,label="   number of instances")
+        colcnt = 1
+        if self.url != None:
+            Label(devicesFrame,text="@" + self.url[7:],bd=1,background="yellow").grid(row=rowcnt,column=colcnt)
+            colcnt += 1
+        if not self.isRealDevice:
+            createStringInput(self,'instanceCount',devicesFrame,rowcnt,column=colcnt,width=8,label="   number of instances")
+            colcnt += 1
+        else:
+            Label(devicesFrame,text="Real Device",background="green",bd=1).grid(row=rowcnt,column=colcnt)
+            colcnt += 1
         simulatorWindow = devicesFrame.winfo_toplevel()
         #b['command'] = lambda : self.openAsToplevel(simulatorWindow)
         b['command'] = lambda : self.simulator._openOrFocusDeviceWindow(self)
@@ -375,9 +440,10 @@ class DeviceUI(Device):
         top.appObject = self
         self.buildUI(master = top)
         top.protocol("WM_DELETE_WINDOW", lambda : self.closeUI(top))
-        #top.geometry('+5+242')
-        #top.wait_visibility(top)
-        #print str(openingWindow.winfo_geometry())
+        if self.url == None:
+            self.startPolling()
+        else:
+            self.startInfoPolling()
 
     def hasWindowOpen(self):
         try:
@@ -418,7 +484,7 @@ class DeviceUI(Device):
                 return sname
             cnt += 1
     
-    def addSensorUI(self,sensor=None):
+    def addSensorUI(self,sensor=None,dialog=None):
         sname = self._getUniqueSensorName()
         if sensor == None:
             sensor0 = createSensor(name=sname)
@@ -427,9 +493,10 @@ class DeviceUI(Device):
         sensor0.device = self
         #sensor0.__root__ = self.__root__
         self.addSensor(sensor0)
-        self.updateSensorsFrame()
+        updateTarget = dialog if dialog != None else self
+        updateTarget.updateSensorsFrame()
 
-    def addSensorFromFileUI(self):
+    def addSensorFromFileUI(self,dialog=None):
         fileName = askopenfilename(initialdir = defaultDataFolder,defaultextension=".sensor",filetypes=[('sensor files', '.sensor')])
         if fileName == '':
             return
@@ -437,27 +504,32 @@ class DeviceUI(Device):
             evalstr = getFileContents(fileName)
             sensor = eval(evalstr)
             sensor.setLoadFromFileName(fileName)
-            self.addSensorUI(sensor = sensor)
+            self.addSensorUI(sensor = sensor, dialog = dialog)
         except Exception as e:
             msg = "problems loading '" + fileName + '": ' + str(e)
             messageBox.showerror('Sensor load error',msg)
 
     def updateSensorsFrame(self):
-        sframe = self.sensorsFrame
-        for w in sframe.winfo_children():
-            w.destroy()
+        pass
+        #sframe = self.sensorsFrame
+        #for w in sframe.winfo_children():
+        #    w.destroy()
 
-        rowcnt = 0
-        for sensor in self.sensors:
-            sensor.buildFrameInDeviceUI(sframe,rowcnt)
-            rowcnt += 1
+        #rowcnt = 0
+        #for sensor in self.sensors:
+        #    sensor.buildFrameInDeviceUI(sframe,rowcnt)
+        #    rowcnt += 1
 
         self.updateControlButtons()
         self._updateMessageFormatEditor()
             
     def closeUI(self,top=None):
+        self.cleanup()
         if top == None:
-            top = self.__parent__
+            try:
+                top = self.__parent__
+            except:
+                pass
         if self.threadsAreRunning():
             if messageBox.askokcancel("Quit", "Simulation thread(s) are still running. Do you want to stop them and close this window?"):
                 self._stopSimulationFromUI()
@@ -465,7 +537,8 @@ class DeviceUI(Device):
                 time.sleep(1)
             else:
                 return
-        top.destroy()
+        if top != None:
+            top.destroy()
 
     def applyUI(self):
         for field in self.stringVars.keys():
@@ -483,10 +556,11 @@ class DeviceUI(Device):
     def _closeUI(self,top):
         top.destroy()
 
-    def info(self,message):
+    def info(self,message,tag=None):
         #print("info: " + message)
+        Device.info(self,message)
         try:
-            self.outputText.insert(END,message + "\n")
+            self.outputText.insert(END,message + "\n",tag)
             self.outputText.see(END)
         except:
             pass

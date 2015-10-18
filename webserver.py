@@ -81,6 +81,8 @@ class SimRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             deviceInfoPatternMatch = deviceInfoPattern.match(self.path)
             deviceSensorValuesPattern = re.compile('^/device/([0-9]+)/sensorvalues$')
             deviceSensorValuesPatternMatch = deviceSensorValuesPattern.match(self.path)
+            devicePollingIsRunningPattern = re.compile('^/device/([0-9]+)/pollingisrunning$')
+            devicePollingIsRunningPatternMatch = devicePollingIsRunningPattern.match(self.path)
             if (self.path == '/info') or (self.path == '/'):
                 obj = self.simulator.toJson()
                 self.OK().json(obj)
@@ -96,13 +98,24 @@ class SimRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 indexstr = deviceInfoPatternMatch.group(1)
                 index = int(indexstr)
                 d = self.simulator.devices[index]
-                obj = {'messages' : d.infoBuffer, 'payload' : d.payloadBuffer, 'threadsAreRunning' : d.threadsAreRunning()}
+                obj = {
+                    'messages' : d.infoBuffer,
+                    'payload' : d.payloadBuffer,
+                    'threadsAreRunning' : d.threadsAreRunning(),
+                    'pollingisrunning' : d.pollingIsRunning
+                }
                 self.OK().json(obj)
             elif deviceSensorValuesPatternMatch:
                 indexstr = deviceSensorValuesPatternMatch.group(1)
                 index = int(indexstr)
                 d = self.simulator.devices[index]
                 obj = d._collectSensorValues()
+                self.OK().json(obj)
+            elif devicePollingIsRunningPatternMatch:
+                indexstr = devicePollingIsRunningPatternMatch.group(1)
+                index = int(indexstr)
+                d = self.simulator.devices[index]
+                obj = {'result' : d.pollingIsRunning}
                 self.OK().json(obj)
             else:
                 self.ERROR("invalid http request: " + str(self.path))
@@ -114,6 +127,7 @@ class SimRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         print "POST: path=" + str(self.path)
         devicePattern = re.compile('^/device/([0-9]+)$')
         devicePatternMatch = devicePattern.match(self.path)
+        msg = "no message"
         try:
             if devicePatternMatch:
                 obj = {'result':'success'}
@@ -124,12 +138,15 @@ class SimRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 indexstr = devicePatternMatch.group(1)
                 index = int(indexstr)
                 d = self.simulator.devices[index]
+                msg = "processing remote command failed"
                 res = d._processRemoteCommand(jsonData)
+                msg = "processing remote command ok"
                 if res != None:
                     obj = res
                 self.OK().json(obj)
             else:
                 self.ERROR("invalid http request: " + str(self.path))                
         except Exception as e:
-            print str(e)
-            self.ERROR(str(e))
+            errmsg = str(e) + " [" + msg + "]"
+            print errmsg
+            self.ERROR(errmsg)

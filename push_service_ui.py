@@ -42,10 +42,16 @@ class PushServiceUI(PushService):
         addStringVar(self,'hcpDeviceId','HCP Device Id')
         addStringVar(self,'messageTypeIdToDevice','HCP Message Type Id (To Device)')
         self.selectedActuatorNameSV = addStringVar(self,'selectedActuatorName','Actuator',values=[''])
-
         
         self.selectedDeviceNameSV.trace("w",self._updateSelectedDeviceName)
         self.selectedActuatorNameSV.trace("w",self._updateSelectedActuatorName)
+
+        self.messageFieldStringVarNames = [];
+        for mname in self.messageFieldNames:
+            vname = "__" + mname
+            setattr(self,vname,'')
+            sv = addStringVar(self,vname,mname)
+            self.messageFieldStringVarNames.append(vname)
 
     
     def buildUI(self,master):
@@ -65,6 +71,22 @@ class PushServiceUI(PushService):
         rowcnt += 1
 
         inputFields.pack(anchor=W,expand=True)
+
+        payloadFrame = Frame(f,relief=SUNKEN,bd=1)
+        Label(payloadFrame,text="Payload",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
+        rowcnt = 1
+        for vname in self.messageFieldStringVarNames:
+            createStringInput(self,vname,payloadFrame,rowcnt)
+            rowcnt += 1
+
+        payloadFrame.pack(padx=5,pady=5,fill=X)
+
+        execButtons = Frame(f)
+
+        Button(execButtons,text="Preview Push Message",command=self._previewPushMessage).grid(row=0,column=0)
+        Button(execButtons,text="Push Message To HCP",command=self._doPush).grid(row=0,column=1)
+
+        execButtons.pack(fill=BOTH,padx=5,pady=5)
 
 
         # output 
@@ -112,7 +134,26 @@ class PushServiceUI(PushService):
             top = self.__parent__
         top.destroy()
 
+    def _createPayloadFromStringVars(self):
+        payload = {}
+        for vname in self.messageFieldStringVarNames:
+            infoObj = self.stringVars[vname]
+            fieldName = vname[2:]
+            value = infoObj['stringVar'].get()
+            payload[fieldName] = value
+        return payload
 
+    def _doPush(self,dummyMode=False):
+        payload = self._createPayloadFromStringVars()
+        #str = json.dumps(payload)
+        #self.info(str)
+        kwargs = payload
+        if dummyMode:
+            kwargs['dummyMode'] = dummyMode
+        self.push(**kwargs)
+
+    def _previewPushMessage(self):
+        self._doPush(dummyMode=True)
 
     def _updateSelectedDeviceName(self,*args):
         sv = getStringVarForField(self,'selectedDeviceName')
@@ -133,7 +174,6 @@ class PushServiceUI(PushService):
         msv = getStringVarForField(self,'messageTypeIdToDevice')
         msv.set(deviceObj.messageTypeIdToDevice)
         asv = getStringVarForField(self,'selectedActuatorName')
-        print "setting selectedActuatorName to empty string"
         asv.set('')
         updateOptionMenuValues(self,'selectedActuatorName',deviceObj.actuatorNames)
         self._updatePayloadFields()
@@ -155,7 +195,18 @@ class PushServiceUI(PushService):
         self._updatePayloadFields()
 
     def _updatePayloadFields(self):
-        pass
+        payload = self.createInitialPayload()
+        for field,value in payload.iteritems():
+            if value == '':
+                continue
+            vname = "__" + field
+            sv = getStringVarForField(self,vname)
+            if sv == None:
+                continue
+            sv.set(value)
+
+        #str = json.dumps(payload)
+        #self.info(str)
 
     
     def info(self,message):

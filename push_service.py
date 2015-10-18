@@ -131,8 +131,12 @@ class PushService:
 
         if hcpDeviceId == None or messageTypeIdToDevice == None:
             raise Exception("cannot perform push operation: you forgot to specify hcpDeviceId and/or messageTypeIdToDevice.")
+
         
-        self._doPushToHCP(hcpDeviceId,messageTypeIdToDevice,payload,dummyMode=dummyMode)
+        #self._doPushToHCP(hcpDeviceId,messageTypeIdToDevice,payload,dummyMode=dummyMode)
+        timer = threading.Timer(0,PushService._doPushToHCP,[self,hcpDeviceId,messageTypeIdToDevice,payload,dummyMode])
+        timer.start()
+        
 
     def _checkAndCompletePayload(self,payload,device=None,actuator=None,doCheck=True):
         for field in self.messageFields:
@@ -143,26 +147,36 @@ class PushService:
             if required:
                 if field.has_key('defaultValue'):
                     defaultValue = field['defaultValue']
-                    if actuator != None or device != None:
-                        tmpl = Template(defaultValue)
-                        defaultValue = tmpl.safe_substitute(actuator_id=actuator.id,actuator=actuator.id,actuator_name=actuator.name)
+                    actuator_id = ''
+                    actuator_name = ''
+                    device_uuid = ''
+                    if actuator != None:
+                        actuator_id = actuator.id
+                        actuator_name = actuator.name
+                    if device != None:
+                        device_uuid = device.uuid
+                    tmpl = Template(defaultValue)
+                    defaultValue = tmpl.safe_substitute(actuator_id=actuator_id,actuator=actuator_id,actuator_name=actuator_name,
+                                                        device_id=device_uuid,device_uuid=device_uuid)
                     payload[fname] = defaultValue
                 else:
                     if doCheck:
                         raise Exception('payload is missing required field "' + fname + '"')
                     else:
-                        payload[fname] = 'value required'
+                        payload[fname] = ''
             else:
-                payload[fname] = 'value optional'
+                payload[fname] = ''
 
-    def completePayload(self,payload,actuator=None):
+    def completePayload(self,payload,device=None,actuator=None):
         if actuator == None:
             actuator = self.actuator
-        self._checkAndCompletePayload(payload,actuator=actuator,doCheck=False)
+        if device == None:
+            device = self.device
+        self._checkAndCompletePayload(payload,device=device,actuator=actuator,doCheck=False)
 
-    def createInitialPayload(self,actuator=None):
+    def createInitialPayload(self,device=None,actuator=None):
         payload = {}
-        self.completePayload(payload,actuator=actuator)
+        self.completePayload(payload,device=None,actuator=actuator)
         return payload
 
     # this method does the actual http-push to HCP using the parameters collecting in the push method
@@ -179,7 +193,7 @@ class PushService:
             http = urllib3.proxy_from_url(config.proxy_url)
 
         push_url='https://iotmms' + config.hcp_account_id + config.hcp_landscape_host + '/com.sap.iotservices.mms/v1/api/http/push/' + str(hcpDeviceId)
-        self.info(push_url)
+        self.info('push url:\n  ' + push_url)
         # use with authentication
         headers = urllib3.util.make_headers(user_agent=None)
         headers['Authorization'] = config.hcp_authorization_header
@@ -192,12 +206,15 @@ class PushService:
             'messages' : [payload]
         }
 	body = json.dumps(bodyObj)
-        self.info("pushing to hcp: " + body)
+        self.info('message body:\n  ' + body)
         if dummyMode:
-            self.info("Dummy mode is active, not pushing anything to HCP.")
+            #self.info("Dummy mode is active, not pushing anything to HCP.")
             return
-        r = http.urlopen('POST', push_url, body=body, headers=headers)
-        self.info('push_to_hcp(): ' + str(r.status) + ' ' + r.data)
+        try:
+            r = http.urlopen('POST', push_url, body=body, headers=headers)
+            self.info('push_to_hcp(): ' + str(r.status) + ' ' + r.data)
+        except Exception as e:
+            self.info(str(e))
 
     def info(self,msg):
         print msg

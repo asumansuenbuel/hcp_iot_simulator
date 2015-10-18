@@ -5,7 +5,18 @@ hcp_account_id = '<your hcp account id, usually ending with "trial">'
 
 # you only need to adapt this part of the URL if you are NOT ON TRIAL but e.g. on PROD
 hcp_landscape_host='.hanatrial.ondemand.com'
+
+
 # hcp_landscape_host='.hana.ondemand.com' # this is used on PROD
+# the credentials header for pushing messages to the device; the header
+# value can be created using the following command line (in a terminal):
+#
+#   python -c 'import urllib3 as u;h=u.util.make_headers(basic_auth="user:password");print h["authorization"]'
+#
+# of course, user and password have to be substituted accordingly using the HCP credentials. Copy/paste the output of
+# this command as value of the hcp_authorization_header variable below:
+
+hcp_authorization_header='Basic xxxxxxxxxxxxxxxxxxxx'
 
 # optional network proxy, set if to be used, otherwise set to ''
 proxy_url=''

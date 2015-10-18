@@ -1,3 +1,9 @@
+# Dialogs for Device UI
+# 
+# Author: Asuman Suenbuel
+# (c) 2015
+#
+
 from Tkinter import *
 import tkModalDialog
 from sim_utils import *
@@ -6,13 +12,21 @@ class HCPParametersDialog(tkModalDialog.Dialog):
 
     @staticmethod
     def open(device):
-        HCPParametersDialog(device.__parent__,device=device)
+        HCPParametersDialog(device.__parent__,title='HCP Parameters for "' + str(device.name) + '"',device=device)
 
     def __init__(self,*args,**kwargs):
         if 'device' in kwargs:
             self.device = kwargs['device']
             del kwargs['device']
         tkModalDialog.Dialog.__init__(self,*args,**kwargs)
+
+    def saveAsDefault(self):
+        fieldsToUpdate = ['hcpDeviceId','hcpOauthCredentials','messageTypeId','messageTypeIdToDevice']
+        for field in self.device.stringVars.keys():
+            if field in fieldsToUpdate:
+                print "updating field '" + field + "'..."
+                updateValueFromStringVar(self.device,field)
+        self.device.saveHcpConfig()
 
     def body(self,master):
         device = self.device
@@ -25,6 +39,8 @@ class HCPParametersDialog(tkModalDialog.Dialog):
         createStringInput(device,'messageTypeId',inputFields,rowcnt)
         rowcnt += 1
         createStringInput(device,'messageTypeIdToDevice',inputFields,rowcnt)
+        rowcnt += 1
+        Button(inputFields,text="Save as default parameters",command=self.saveAsDefault).grid(row=rowcnt,columnspan=2)
         rowcnt += 1
 
 class SensorsDialog(tkModalDialog.Dialog):
@@ -47,12 +63,13 @@ class SensorsDialog(tkModalDialog.Dialog):
         self.sensorsFrame = Frame(sensorsOuterFrame)
         self.sensorsFrame.grid(row=rowcnt,columnspan=2,pady=5,sticky=W)
         rowcnt += 1
-        addSensorButton = Button(sensorsOuterFrame,text="Add New Sensor",
-                                 command=lambda : self.device.addSensorUI(dialog=self))
-        addSensorButton.grid(row=rowcnt,sticky=W,pady=10)
-        loadSensorButton = Button(sensorsOuterFrame,text="Add Sensor From File",
-                                  command=lambda : self.device.addSensorFromFileUI(dialog=self))
-        loadSensorButton.grid(row=rowcnt,column=1,sticky=W,pady=10)
+        if not self.device.isRealDevice:
+            addSensorButton = Button(sensorsOuterFrame,text="Add New Sensor",
+                                     command=lambda : self.device.addSensorUI(dialog=self))
+            addSensorButton.grid(row=rowcnt,sticky=W,pady=10)
+            loadSensorButton = Button(sensorsOuterFrame,text="Add Sensor From File",
+                                      command=lambda : self.device.addSensorFromFileUI(dialog=self))
+            loadSensorButton.grid(row=rowcnt,column=1,sticky=W,pady=10)
         self.updateSensorsFrame()
 
     def updateSensorsFrame(self):

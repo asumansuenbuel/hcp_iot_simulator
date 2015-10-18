@@ -10,9 +10,11 @@ from device_ui import *
 from Tkinter import *
 import tkMessageBox as messageBox
 from tkFileDialog import askopenfilename
-from device import *
+#from device import *
 from sim_utils import *
 import json,time
+import threading
+
 # --------------------------------------------------------------------------------
 def createSensor(*args,**kwargs):
     if 'filename' in kwargs:
@@ -48,49 +50,73 @@ class SensorUI(Sensor):
         rowcnt += 1
         inputFields.pack(anchor=W,expand=True)
 
-        typeFrame = Frame(f)
-        createStringInput(self,'valueType',typeFrame,0)
-        typeFrame.pack(anchor=W)
-        self.digitsFrame = Frame(f)
-        createStringInput(self,'ndigitsAfterDecimalPoint',self.digitsFrame,row=0,width=6)
-        self.digitsFrame.pack(anchor=W)
-        
-        
+        if self.isRealSensor:
+            labelFrame = Frame(f)
+            Label(labelFrame,text="This is a real sensor.").grid(row=0,columnspan=3)
+            Label(labelFrame,text="Current Value:").grid(row=1,column=0)
+            self.realValueLabel = Label(labelFrame,text="",width=8,bd=2,relief="sunken")
+            self.realValueLabel.grid(row=1,column=1)
+            #Button(labelFrame,text="Update",command=self._updateRealValue).grid(row=1,column=2)
+            labelFrame.pack()
+            self._updateRealValueLoop()
+            
+        else:
+            typeFrame = Frame(f)
+            createStringInput(self,'valueType',typeFrame,0)
+            typeFrame.pack(anchor=W)
+            self.digitsFrame = Frame(f)
+            createStringInput(self,'ndigitsAfterDecimalPoint',self.digitsFrame,row=0,width=6)
+            self.digitsFrame.pack(anchor=W)
 
-        valueRangeFrame = Frame(f,bd=1,relief=SUNKEN)
-        Label(valueRangeFrame,text="Value Range",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
-        createStringInput(self,'minValue',valueRangeFrame,row=1,column=0,width=10)
-        createStringInput(self,'maxValue',valueRangeFrame,row=1,column=2,width=10)
-        createStringInput(self,'startValue',valueRangeFrame,row=2,width=10)
-        valueRangeFrame.pack(fill=X,padx=5,pady=5)
+            valueRangeFrame = Frame(f,bd=1,relief=SUNKEN)
+            Label(valueRangeFrame,text="Value Range",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
+            createStringInput(self,'minValue',valueRangeFrame,row=1,column=0,width=10)
+            createStringInput(self,'maxValue',valueRangeFrame,row=1,column=2,width=10)
+            createStringInput(self,'startValue',valueRangeFrame,row=2,width=10)
+            valueRangeFrame.pack(fill=X,padx=5,pady=5)
 
-        varianceFrame = Frame(f,bd=1,relief=SUNKEN)
-        Label(varianceFrame,text="Variance (how quickly the sensor values change)",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
-        createStringInput(self,'varianceSeconds',varianceFrame,row=1,column=0,width=10)
-        createStringInput(self,'varianceValue',varianceFrame,row=2,column=0,width=10)
-        varianceFrame.pack(fill=X,padx=5,pady=5)
+            varianceFrame = Frame(f,bd=1,relief=SUNKEN)
+            Label(varianceFrame,text="Variance (how quickly the sensor values change)",font="-weight bold").grid(row=0,columnspan=4,sticky=W)
+            createStringInput(self,'varianceSeconds',varianceFrame,row=1,column=0,width=10)
+            createStringInput(self,'varianceValue',varianceFrame,row=2,column=0,width=10)
+            varianceFrame.pack(fill=X,padx=5,pady=5)
 
         buttonsFrame = Frame(f)
-        Button(buttonsFrame,text = "Apply", command = lambda : self.applyUI(master)).grid(row=0,column=0,sticky=W)
-        if self.device != None:
+        if not (self.isRealSensor):
+            Button(buttonsFrame,text = "Apply", command = lambda : self.applyUI(master)).grid(row=0,column=0,sticky=W)
+        if (self.device != None) and (not (self.isRealSensor)):
             Button(buttonsFrame,text = "Remove from device", command = lambda : self.removeUI(master)).grid(row=0,column=1,sticky=W)
-        Button(buttonsFrame,text = "Cancel", command = lambda : self.closeUI(master)).grid(row=0,column=2,sticky=E)
+
+        cancelText = "Close" if self.isRealSensor else "Cancel"
+        Button(buttonsFrame,text = cancelText, command = lambda : self.closeUI(master)).grid(row=0,column=2,sticky=E)
         buttonsFrame.pack(fill=X,padx=5,pady=5,expand=1)
 
         f.pack(fill=BOTH,padx=10,pady=10,expand=1);
         outerframe.pack(fill=BOTH,expand=1)
         master.title("Sensor \"" + self.name + "\"")
 
+    def _updateRealValue(self):
+        if hasattr(self,'realValueLabel'):
+            label = self.realValueLabel
+            label.config(text=str(self.getRealValue()))
+
+    def _updateRealValueLoop(self):
+        self._updateRealValue()
+        self.__updateRealValueTimer__ = threading.Timer(2,SensorUI._updateRealValueLoop,[self])
+        self.__updateRealValueTimer__.start()
+            
     def openAsToplevel(self):
         top = Toplevel()
         top.appObject = self
         self.buildUI(master = top)
+        top.protocol("WM_DELETE_WINDOW", lambda : self.closeUI(top))
         #self.__root__.wait_window(top)
                    
-    def buildFrameInDeviceUI(self,sensorsFrame,rowcnt):
+    def buildFrameInDeviceUI(self,sensorsFrame,rowcnt,dialog=None):
         b = Button(sensorsFrame,text=self.name,bg="lightblue",width=25)
         b.grid(row=rowcnt,column=0,sticky=W)
         b['command'] = self.openAsToplevel
+        self.dialog = dialog
 
     def applyUI(self,top):
         for field in self.stringVars.keys():
@@ -108,10 +134,16 @@ class SensorUI(Sensor):
         msg = "Do you really want to remove this sensor from the device?"
         if messageBox.askyesno(title,msg):
             self.device.removeSensor(self)
-            self.device.updateSensorsFrame()
+            #self.device.updateSensorsFrame()
+            if hasattr(self,'dialog') and self.dialog != None:
+                self.dialog.updateSensorsFrame()
             self.closeUI(top)
     
     def closeUI(self,top):
+        try:
+            self.__updateRealValueTimer__.cancel()
+        except:
+            pass
         top.destroy()
 
 

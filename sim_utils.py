@@ -5,8 +5,8 @@
 # (c) 2015
 #
 
-import os, sys
-import urllib
+import os, sys, re
+import urllib, urllib2, json
 from Tkinter import *
 import tkMessageBox as messageBox
 
@@ -18,6 +18,19 @@ except ImportError:
     config = {}
 
 defaultDataFolder = config.default_data_folder if hasattr(config,'default_data_folder') else 'simdata'
+
+# --------------------------------------------------------------------------------
+# checks whether the simulator runs on a raspberry device
+# --------------------------------------------------------------------------------
+
+def on_raspberry():
+    uname_output = os.popen('uname -a').read()
+    return re.match('^.*raspberrypi.*$',uname_output)
+
+runs_on_raspberry = on_raspberry()
+
+
+# --------------------------------------------------------------------------------
 
 
 filePersistenceInitialized = False
@@ -57,7 +70,7 @@ def stringUnescape(string):
 
 # ================================================================================
 
-class FilePersistedObject:
+class FilePersistedObject(object):
 
     def initFilePersistence(self,typeSuffix,dataFolder=defaultDataFolder):
         self.typeSuffix = typeSuffix
@@ -104,6 +117,14 @@ class CannotOverwriteFileError(Exception):
 
 # --------------------------------------------------------------------------------
 
+# sets the background color recursively for the given widget
+def tkSetBackgroundColor(widget):
+    pass
+
+
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+
 def addStringVar(obj,field,label,values = None, valueType = 'string'):
     if not hasattr(obj,'stringVars'):
         obj.stringVars = {}
@@ -143,18 +164,42 @@ def getStringVarForField(obj,field):
     sv = infoObj['stringVar']
     return sv
 
-def createStringInput(obj,field,parent,row,column=0,width=40,label=None):
+def createStringInput(obj,field,parent,row,column=0,width=40,label=None,highlightbackground=None,bg=None,fg=None):
     infoObj = obj.stringVars[field]
     labelText = label if label != None else infoObj['label']
-    labelW = Label(parent, text = labelText+":")
+    labelW = Label(parent, text = labelText+":", background=highlightbackground)
     labelW.grid(row=row,column=column,sticky=W)
     tv = infoObj['stringVar']
+    res = None
     if 'values' in infoObj:
-        options = apply(OptionMenu,(parent,tv) + tuple(infoObj['values']))
+        optionValues = infoObj['values'] if len(infoObj['values']) > 0 else [' ']
+        options = apply(OptionMenu,(parent,tv) + tuple(optionValues))
         options.grid(row=row,column=column+1,sticky=W)
+        infoObj['optionMenu'] = options
+        res = options
     else:
-        entry = Entry(parent, width = width, textvariable=tv)
+        entry = Entry(parent, width = width, textvariable=tv, highlightbackground=highlightbackground,bg=bg,fg=fg)
         entry.grid(row=row,column=column+1,sticky=W)
+        res = entry
+        infoObj['entry'] = entry
+    return res
+
+def updateOptionMenuValues(obj,field,values):
+    infoObj = obj.stringVars[field]
+    if not infoObj.has_key('optionMenu'):
+        return
+    optionMenu = infoObj['optionMenu'];
+    var = infoObj['stringVar']
+    m = optionMenu['menu']
+    m.delete(0,'end')
+    for value in values:
+        m.add_command(label=value, command=_setit(var,value))
+
+def _setit(var,value):
+    return lambda : var.set(value)
+
+
+# --------------------------------------------------------------------------------
 
 def saveToFileUI(obj,standalone=False):
     try:
@@ -167,3 +212,13 @@ def saveToFileUI(obj,standalone=False):
                 obj.saveToFile(force=True,standalone=standalone)
     except Exception as e:
         messageBox.showerror("Error saving file",str(e))
+
+# --------------------------------------------------------------------------------
+
+def postRequest(postUrl,dataDict={}):
+    data = json.dumps(dataDict)
+    print 'postUrl: ' + postUrl
+    print 'data: ' + str(data)
+    req = urllib2.Request(postUrl,data)
+    response = urllib2.urlopen(req)
+    return response.read()

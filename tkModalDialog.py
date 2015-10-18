@@ -11,7 +11,7 @@ import os
 
 class Dialog(Toplevel):
 
-    def __init__(self, parent, title = None, isModal = True):
+    def __init__(self, parent, title = None, isModal = True, okText = "Ok", okInitialState=None):
 
         Toplevel.__init__(self, parent)
         self.transient(parent)
@@ -24,6 +24,9 @@ class Dialog(Toplevel):
         self.result = None
 
         self.isModal = isModal
+
+        self.okText = okText
+        self.okInitialState = okInitialState
 
         body = Frame(self)
         self.initial_focus = self.body(body)
@@ -62,14 +65,19 @@ class Dialog(Toplevel):
 
         box = Frame(self)
 
-        w = Button(box, text="OK", width=10, command=self.ok, default=ACTIVE)
+        okText = self.okText
+        okWidth = len(okText) if len(okText) > 10 else 10
+        
+        w = Button(box, text=okText, width=okWidth, command=self.ok, default=ACTIVE, state=self.okInitialState)
         w.pack(side=LEFT, padx=5, pady=5)
         if self.isModal:
-            w = Button(box, text="Cancel", width=10, command=self.cancel)
-            w.pack(side=LEFT, padx=5, pady=5)
+            wcancel = Button(box, text="Cancel", width=10, command=self.cancel)
+            wcancel.pack(side=LEFT, padx=5, pady=5)
 
-        self.bind("<Return>", self.ok)
+        #self.bind("<Return>", self.ok)
         self.bind("<Escape>", self.cancel)
+
+        self.okButton = w
 
         box.pack()
 

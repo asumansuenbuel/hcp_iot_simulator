@@ -4,13 +4,22 @@
 # (c) 2015
 #
 
-import time, threading, random, json, sys, urllib3, os
-import uuid as uuidlib
-from string import Template
+# app-specific imports
+from sensor import *
+from device_thread import *
 from actuator import *
 import actuator_config
 from sim_utils import *
+from real_device import RealDevice
 
+import urllib2,json
+
+# lib imports
+import time, threading, random, json, sys, urllib3, os
+import uuid as uuidlib
+from string import Template
+
+# need to add the current path so that we can support local hcp_config.py files
 sys.path.insert(0,os.getcwd())
 
 try:
@@ -33,188 +42,23 @@ except ImportError as e:
 '''
     sys.exit(1)
 
+try:
+    import hcp_config_saved as configSaved
+    attrs = ['hcp_device_id','hcp_oauth_credentials','hcp_message_type_id_from_device','hcp_message_type_id_to_device']
+    for attr in attrs:
+        if hasattr(configSaved,attr):
+            val = getattr(configSaved,attr)
+            print "setting attribute '" + attr + "' from hcp_config_saved.py..."
+            setattr(config,attr,val)
+except ImportError:
+    print "hcp_config_saved.py not present."
+    pass
+    
 # --------------------------------------------------------------------------------
 def createDevice(*args,**kwargs):
     if 'filename' in kwargs:
         return Device.createFromFile(kwargs['filename'])
     return Device(*args,**kwargs)
-
-def createSensor(*args,**kwargs):
-    if 'filename' in kwargs:
-        return Sensor.createFromFile(kwargs['filename'])
-    return Sensor(*args,**kwargs)
-# --------------------------------------------------------------------------------
-
-
-
-# ================================================================================
-#
-# Sensor class
-#
-# ================================================================================
-
-# The Sensor class is the representation of a sensor emitting simple values
-# the (configurable) properties are the following:
-#
-# - name :
-#     the descriptive name of the sensor, e.g. "light", "temperature", etc.
-# - unitName :
-#     the name of the measurement unit for this sensor (e.g. Lux, Celsius)
-# - isFloat :
-#     True if the values should be floats, otherwise the value will be integers
-# - minValue, maxValue :
-#     the range of values that this sensor can emit
-# - startValue :
-#     the value to start the simulation with
-# - varianceSeconds, varianceValue :
-#     the maximum change of the values during the given number of
-#     seconds; for instance varianceSeconds = 10, varianceValue = 5
-#     means that within 10 seconds the sensor value can maximally
-#     change by +/- 5. This ensures that the simulator produces
-#     somewhat realistic values (e.g. a temperature change of 50
-#     degress from 1 second to another would be pretty unlikely...)
-# - ndigitsAfterDecimalPoint :
-#     for values of type float this specifies the number of digits
-#     after the decimal point
-#
-class Sensor(FilePersistedObject):
-    
-    @staticmethod
-    def createFromFile(filename):
-        evalstr = getFileContents(filename)
-        obj = eval(evalstr)
-        if not isinstance(obj,Sensor):
-            raise Exception('object created from file "' + filename + '" is not a Sensor.')
-        return obj
-
-    def __init__(self,
-                 name,
-                 unitName="",
-                 isFloat=False,
-                 minValue=0,
-                 maxValue=50,
-                 startValue=None,
-                 varianceSeconds=1,
-                 varianceValue=1,
-                 ndigitsAfterDecimalPoint=2,
-                 description=""
-             ):
-        self.name = name
-        self.unitName = unitName
-        self.isFloat = isFloat
-        self.isInt = not isFloat
-        self.minValue = minValue
-        self.maxValue = maxValue
-        self.startValue = startValue
-        self.varianceSeconds = varianceSeconds
-        self.varianceValue = varianceValue
-        self.ndigitsAfterDecimalPoint = ndigitsAfterDecimalPoint
-        self.description = description
-        self.device = None
-        # internal fields:
-        self.validate()
-        self.initFilePersistence('sensor')
-
-    def getRandomValueInRange(self,min=None,max=None):
-        min = min if min != None else self.minValue
-        max = max if max != None else self.maxValue
-        if (self.isFloat):
-            return round(random.uniform(min,max),self.ndigitsAfterDecimalPoint)
-        else:
-            return random.randint(min,max)
-        
-    def nextValue(self,timestamp = None,lastValue=None,lastTimestamp=None,dummyMode=False):
-        ts = int(time.time()) if timestamp == None else timestamp
-        if dummyMode:
-            value = self.getRandomValueInRange()
-        else:
-            if lastValue == None:
-                if self.startValue != None:
-                    value = self.startValue
-                else:
-                    value = self.getRandomValueInRange()
-                nextLastValue = value
-            else:
-                lastTs = lastTimestamp
-                if lastTs == None:
-                    value = self.getRandomValueInRange()
-                    nextLastValue = value
-                else:
-                    tdiff = ts - lastTs
-                    vfactor = float(tdiff)/float(self.varianceSeconds)
-                    maxValueDiff = vfactor * self.varianceValue
-                    valueDiff = random.uniform(0,maxValueDiff)
-                    valueDiff = valueDiff if random.randint(0,1) == 0 else -valueDiff
-                    #print "time diff: " + str(tdiff) + " seconds"
-                    #print "vfactor: " + str(vfactor)
-                    #print "maxValueDiff: " + str(maxValueDiff)
-                    #print "valueDiff: " + str(valueDiff)
-                    value = lastValue + valueDiff
-                    if value < self.minValue or value > self.maxValue:
-                        value = lastValue - valueDiff
-                        #print "different sign"
-                    if value < self.minValue or value > self.maxValue:
-                        value = self.getRandomValueInRange()
-                        #print "new random value"
-                    #print "value: " + str(value)
-                    nextLastValue = value
-                    
-        if self.isFloat:
-            if self.ndigitsAfterDecimalPoint != None:
-                value = round(value,self.ndigitsAfterDecimalPoint)
-        else:
-            value = int(round(value))
-
-        nextLastTimestamp = ts
-        if not dummyMode:
-            res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
-        else:
-            res = {'value' : value, 'timestamp' : ts}
-        return res
-
-    def validate(self):        
-        if self.name == None or len(self.name) == 0:
-            raise Exception("sensor name must not be empty")
-        if not self.minValue < self.maxValue:
-            raise Exception("minValue must be less than maxValue")
-        if self.startValue != None:
-            if not (self.startValue >= self.minValue and self.startValue <= self.maxValue):
-                raise Exception("startValue must be in minValue,maxValue range")
-
-    def info(self,message):
-        if self.device == None:
-            print "info: " + message
-        else:
-            self.device.info(message)
-        
-    def __str__(self,indent=''):
-        s = indent
-        s += "Sensor '" + self.name + "', unit: " + self.unitName
-        s += ", minValue: " + str(self.minValue)
-        s += ", minValue: " + str(self.maxValue)
-        s += ", startValue: " + str(self.startValue)
-        s += ", variance: " + str(self.varianceValue) + " in " + str(self.varianceSeconds) + " seconds"
-        return s
-
-    def __repr__(self):
-        return self.__str__()
-
-    def getPythonConstructorString(self,indent="",standalone=False):
-        s = ''
-        s += indent + 'createSensor(\n'
-        s += indent + '  name = stringUnescape("' + stringEscape(self.name) + '"),\n'
-        s += indent + '  unitName = stringUnescape("' + stringEscape(self.unitName) + '"),\n'
-        s += indent + '  isFloat = ' + str(self.isFloat) + ',\n'
-        s += indent + '  minValue = ' + str(self.minValue) + ',\n'
-        s += indent + '  maxValue = ' + str(self.maxValue) + ',\n'
-        if self.startValue != None:
-            s += indent + '  startValue = ' + str(self.startValue) + ',\n'
-        s += indent + '  varianceSeconds = ' + str(self.varianceSeconds) + ',\n'
-        s += indent + '  varianceValue = ' + str(self.varianceValue) + ',\n'
-        s += indent + '  ndigitsAfterDecimalPoint = ' + str(self.ndigitsAfterDecimalPoint) + ',\n'
-        s += indent + '  description = stringUnescape("' + stringEscape(self.description) + '")\n'
-        s += indent + ')'
-        return s
 
 # ================================================================================
 #
@@ -235,21 +79,25 @@ class Device(FilePersistedObject):
             raise Exception('object created from file "' + filename + '" is not a Device.')
         return obj
 
-    def __init__(self,name="GenericSensorDevice",
-                 hcpDeviceId=config.hcp_device_id,
-                 hcpOauthCredentials=config.hcp_oauth_credentials,
-                 messageTypeId=config.hcp_message_type_id_from_device,
-                 messageTypeIdToDevice=config.hcp_message_type_id_to_device,
-                 sensors=[],
-                 actuators=[],
-                 frequencyInSeconds=10,
-                 messageFormat='default',
-                 description="",
-                 instanceCount=1, # the number of instances if attached to a simulator
-                 uuid = None):
+    def __init__(self,name = "GenericSensorDevice",
+                 hcpDeviceId = config.hcp_device_id,
+                 hcpOauthCredentials = config.hcp_oauth_credentials,
+                 messageTypeId = config.hcp_message_type_id_from_device,
+                 messageTypeIdToDevice = config.hcp_message_type_id_to_device,
+                 sensors = [],
+                 actuatorIds = [],
+                 frequencyInSeconds = 10,
+                 messageFormat = 'default',
+                 description = "",
+                 instanceCount = 1, # the number of instances if attached to a simulator
+                 uuid = None,
+                 pollingFrequency = 5,
+                 config = None,
+                 realDeviceId = None,
+                 url=None):
         self.name = name
         self.sensors=sensors
-        self.actuators=actuators
+        self.actuatorIds=actuatorIds
         self.hcpDeviceId = hcpDeviceId
         self.hcpOauthCredentials = hcpOauthCredentials
         self.messageTypeId = messageTypeId
@@ -259,15 +107,101 @@ class Device(FilePersistedObject):
         self.description = description
         self.instanceCount = instanceCount
         self.simulator = None
+        self.actuatorObjects = []
+        self.realDeviceId = realDeviceId
+        self.pollingFrequency = pollingFrequency
+        self.url = url
 
         #self.theThread = Thread(self) # for testing start with a single thread; this will go away
 
         self.threadPool = []
+        self.__pollingTimer__ = None
+        self._infoBuffer = []
+        self._payloadBuffer = []
+        self.__infoPollingTimer__ = None
 
         self.uuid = uuid if uuid != None else str(uuidlib.uuid1())
+
+        if realDeviceId != None:
+            self.realDevice = RealDevice(id=realDeviceId)
+            self.realDevice.device = self # this invokes the setter in RealDevice Class
+            print "device.realDevice is set."
+        else:
+            self.realDevice = None
+        
         self.initFilePersistence('device')
         for sensor in sensors:
             sensor.device = self
+
+        if self.url != None:
+            self.initFromUrl()
+
+
+    # device is a remote device, i.e. it gets all the properties
+    # from a device on a different machine. For that to function,
+    # a simulator instance must be called with the webserver initiated (-w or -p, --port options)
+    # the url must be in the format "http://host:port"
+    def initFromUrl(self):
+        if self.url == None:
+            return
+        self.info('initialzing device from url ' + self.url + '...')
+        requestUrl = self.url
+        try:
+            response = urllib2.urlopen(requestUrl)
+            data = json.loads(response.read())
+            self.info('data loaded from ' + self.url + ", status: ok")
+            
+            #if data['kind'] == 'simulator':
+            #    data = data['devices']
+
+            #if isinstance(data,ListType):
+            #    if len(data) == 0:
+            #        raise Exception("list must have at least one element")
+            #    data = data[0]
+
+            if data['kind'] != 'device':
+                raise Exception("wrong kind '" + data['kind'] + "' returned by url, must be a 'device' kind.")
+
+            self.name = data['name']
+            self.hcpDeviceId = data['hcpDeviceId']
+            self.messageTypeId = data['messageTypeId']
+            self.messageTypeIdToDevice = data['messageTypeIdToDevice']
+            self.uuid = data['id']
+            self.actuatorIds = data['actuatorIds']
+            self.messageFormat = data['messageFormat']
+            self._isRealDevice = data['isRealDevice']
+
+            sensorObjs = data['sensors']
+            for sobj in sensorObjs:
+                try:
+                    del sobj['kind']
+                except:
+                    pass
+                sensor = self.createSensor(**sobj)
+                self.addSensor(sensor)
+            
+        except Exception as e:
+            raise Exception("\n*** something went wrong when trying to access device at " + str(self.url) + "\n*** " + str(e))
+
+    @property
+    def instanceCount(self):
+        if self.isRealDevice:
+            return 1
+        if hasattr(self,'_instanceCount'):
+            return self._instanceCount
+        else:
+            self._instanceCount = 1
+            return 1
+
+    @instanceCount.setter
+    def instanceCount(self,value):
+        self._instanceCount = value
+            
+    @property
+    def isRealDevice(self):
+        if self.url != None and self._isRealDevice:
+            return True
+        return hasattr(self,'realDevice') and self.realDevice != None
 
     def addSensor(self,sensor):
         if not isinstance(sensor,Sensor):
@@ -291,29 +225,77 @@ class Device(FilePersistedObject):
                 return s
         return None
 
+    def createSensor(self,*args,**kwargs):
+        return Sensor(*args,**kwargs)
 
+
+    def _collectSensorValues(self):
+        svalues = {}
+        for sensor in self.sensors:
+            nv = sensor.nextValue(dummyMode=True)
+            value = nv['value']
+            sname = sensor.name
+            svalues[sname] = value
+        return svalues
+    
     @property
-    def availableActuators(self):
-        anames = list(actuator_config.actuatorNames)
-        for act in self.actuators:
+    def availableActuatorIds(self):
+        aids = list(actuator_config.actuatorIds)
+        for act in self.actuatorIds:
             try:
-                anames.remove(act)
+                aids.remove(act)
             except:
                 pass
-        return anames
+        return aids
 
-    def addActuator(self,aname):
-        if not actuator_config.actuatorConstructors.has_key(aname):
-            raise Exception('Actuator "' + aname + '" is not defined in the system.')
+    @property
+    def availableActuatorNames(self):
+        self._updateActuatorObjects()
+        existingIds = map(lambda obj : obj.id,self.actuatorObjects)
+        names = []
+        for aspec in actuator_config.actuatorConstructors:
+            if aspec['id'] in existingIds:
+                continue
+            names.append(aspec['name'])
+        return names
+            
+    
+    def addActuatorId(self,aid):
+        try:
+            actuator_config.actuatorIds.index(aid)
+        except:
+            raise Exception('Actuator with id "' + aid + '" is not defined in the system.')
         alreadyContained = False
         try:
-            self.actuators.index(aname)
+            self.actuatorIds.index(aid)
             alreadyContained = True
         except:
-            self.actuators.append(aname)
+            self.actuatorIds.append(aid)
         if alreadyContained:
-            raise Exception('Actuator "' + aname + '" is already part of this device.')
+            raise Exception('Actuator with id "' + aid + '" is already part of this device.')
+
+    def removeActuatorId(self,aid):
+        try:
+            self.actuatorIds.remove(aid)
+            self._updateActuatorObjects()
+        except:
+            pass
+        
+    @property
+    def actuatorNames(self):
+        self._updateActuatorObjects()
+        return map(lambda obj : obj.name,self.actuatorObjects)
+        
+    # this starts the polling thread for the actuators of the device (if the device has actuators)
+    def startActuatorThread(self,frequencyInSeconds):
+        if length(self.actuatorIds) == 0:
+            return
+        pass
+
+    def stopActuatorTread(self):
+        pass
     
+        
     def getDefaultMessageFormat(self):
         msgs = '['
         sep = ""
@@ -342,11 +324,76 @@ class Device(FilePersistedObject):
                 return True
         return False
 
+    # this gets called from the webserver
+    # when a post request for the device is received
+    def _processRemoteCommand(self,data):
+        cmd = data['command']
+        if cmd == 'start':
+            freq = data['frequencyInSeconds']
+            dummyMode = data['dummyMode']
+            self.start(frequencyInSeconds=freq,dummyMode=dummyMode)
+            return {'message':'simulation started'}
+        elif cmd == "stop":
+            self.stop()
+            return {'message':'simulation stopped'}
+        elif cmd == "pause":
+            self.pause()
+            return {'message':'simulation paused'}
+        elif cmd == "saveHcpConfig":
+            hcpConfig = data['hcpConfig']
+            for field in hcpConfig.keys():
+                setattr(self,field,hcpConfig[field])
+            self.saveHcpConfig()
+            return {'message':'hcpConfig saved'}
+        elif cmd == 'startPolling':
+            if data.has_key('frequency'):
+                self.pollingFrequency = data['frequency']
+            self.startPolling()
+            return {'message':'polling started'}
+        elif cmd == 'stopPolling':
+            self.stopPolling()
+            return {'message':'polling stopped'}
+        else:
+            raise Exception('cannot process remote command: ' + str(data))
+    
     def dummyStart(self,frequencyInSeconds=5):
         self.start(frequencyInSeconds=frequencyInSeconds,dummyMode=True)
-    
+        
+    def startRemote(self,frequencyInSeconds,dummyMode=False):
+        if self.url == None:
+            return
+        postUrl = self.url
+        data = {'command':'start','frequencyInSeconds' : frequencyInSeconds, 'dummyMode' : dummyMode}
+        try:
+            postRequest(postUrl,data)
+            #req = urllib2.Request(postUrl,data)
+            #response = urllib2.urlopen(req)
+            #print response.read()
+        except Exception as e:
+            self.info(str(e))
+
+    def stopRemote(self,paused=False,reset=False):
+        if self.url == None:
+            return
+        postUrl = self.url
+        data = {'command':'stop'}
+        try:
+            postRequest(postUrl,data)
+            #req = urllib2.Request(postUrl,data)
+            #response = urllib2.urlopen(req)
+            #print response.read()
+        except Exception as e:
+            self.info(str(e))
+
+    def pauseRemote(self):
+        self.stopRemote(paused=True)
+        
     # starts simulating values using the given frequency
     def start(self,frequencyInSeconds,dummyMode=False):
+        if self.url != None:
+            self.startRemote(frequencyInSeconds,dummyMode)
+            return
+        
         self.stop(reset = True)
         self.info("creating and starting " + str(self.instanceCount) + " simulation thread(s)...")
 
@@ -360,12 +407,20 @@ class Device(FilePersistedObject):
         self.info("successfully started " + str(self.instanceCount) + " simulation thread(s).")
         
     def stop(self,paused = False,reset = False):
+        if self.url != None:
+            self.stopRemote(paused,reset)
+            return
+        
         #self.theThread.stop(paused=paused)
         for thread in self.threadPool:
             thread.stop(reset=reset)
                       
     def pause(self):
         #self.theThread.pause()
+        if self.url != None:
+            self.pauseRemote(paused,reset)
+            return
+        
         for thread in self.threadPool:
             thread.pause()
 
@@ -390,30 +445,82 @@ class Device(FilePersistedObject):
         s += "running threads count:               " + str(self.runningThreadsCount) + '\n'
         s += "total messages sent during this run: " + str(self.messageCount) + '\n'
         return s
-            
-    def info(self,message):
-        print message
+
+    @property
+    def payloadBuffer(self):
+        bufferContents = self._payloadBuffer
+        self._payloadBuffer = []
+        return bufferContents
+    
+    @property
+    def infoBuffer(self):
+        bufferContents = self._infoBuffer;
+        self._infoBuffer = []
+        return bufferContents
+    
+    def info(self,message,tag=None):
+        isUIVersion = self.__class__.__name__.endswith('UI')
+        self._infoBuffer.append(message)
+        if not isUIVersion:
+            print message
+
+    def saveHcpConfigRemote(self):
+        if self.url == None:
+            return
+        data = {'command':'saveHcpConfig'}
+        hcpConfig = {}
+        fields = ['hcpDeviceId','hcpOauthCredentials','messageTypeId','messageTypeIdToDevice']
+        for field in fields:
+            hcpConfig[field] = getattr(self,field)
+        data['hcpConfig'] = hcpConfig
+        try:
+            postRequest(self.url,data)
+        except Exception as e:
+            self.info(str(e),"red")
+        
+    def saveHcpConfig(self):
+        if self.url != None:
+            self.saveHcpConfigRemote()
+            return
+        fname = "hcp_config_saved.py"
+        s = ''
+        s += "hcp_device_id = '" + self.hcpDeviceId + "'\n"
+        s += "hcp_oauth_credentials = '" + self.hcpOauthCredentials + "'\n"
+        s += "hcp_message_type_id_from_device = '" + self.messageTypeId + "'\n"
+        s += "hcp_message_type_id_to_device = '" + self.messageTypeIdToDevice + "'\n"
+        saveFile(fname,s)
 
     def getPythonConstructorString(self,indent="",standalone=False):
         s = ''
         s += indent + 'createDevice(\n'
         s += indent + '  uuid = "' + self.uuid + '",\n'
         s += indent + '  name = stringUnescape("' + stringEscape(self.name) + '"),\n'
-        s += indent + '  sensors = [\n'
-        sep = ''
-        for sensor in self.sensors:
-            pstr = sensor.getPythonConstructorString(indent = indent + '      ')
-            s += sep + pstr
-            sep = ',\n'
-        s += indent + '\n  ],\n'
+        if not self.isRealDevice:
+            s += indent + '  actuatorIds = ['
+            sep1 = ''
+            for aid in self.actuatorIds:
+                s += sep1 + 'stringUnescape("' + stringEscape(aid) + '")'
+                sep1 = ', '
+            s += '],\n'
+            s += indent + '  sensors = [\n'
+            sep = ''
+            for sensor in self.sensors:
+                pstr = sensor.getPythonConstructorString(indent = indent + '      ')
+                s += sep + pstr
+                sep = ',\n'
+            s += indent + '\n  ],\n'
         if not standalone:
             s += indent + '  instanceCount = ' + str(self.instanceCount) + ',\n'
+        if self.url != None:
+            s += indent + '  url = "' + self.url + '",\n'
         s += indent + '  hcpDeviceId = "' + self.hcpDeviceId + '",\n'
         s += indent + '  hcpOauthCredentials = "' + self.hcpOauthCredentials + '",\n'
         s += indent + '  messageTypeId = "' + self.messageTypeId + '",\n'
         s += indent + '  messageTypeIdToDevice = "' + self.messageTypeIdToDevice + '",\n'
         s += indent + '  messageFormat = stringUnescape("' + stringEscape(self.messageFormat) + '"),\n'
         s += indent + '  frequencyInSeconds = ' + str(self.frequencyInSeconds) + ',\n'
+        if self.realDeviceId != None:
+            s += indent + '  realDeviceId = "' + self.realDeviceId + '",\n'
         s += indent + '  description = stringUnescape("' + stringEscape(self.description) + '")\n'
         s += indent + ')'
         return s
@@ -436,7 +543,7 @@ class Device(FilePersistedObject):
             self.info('reusing thread object with id "' + theThread.idstr + '"')
         if theThread == None:
             # no thread in the pool found, create a new one and add it to the pool
-            theThread = Thread(self)
+            theThread = DeviceThread(self)
             self.threadPool.append(theThread)
             self.info('new thread object created with id "' + theThread.idstr + '"')
         theThread.reset()
@@ -455,42 +562,27 @@ class Device(FilePersistedObject):
     def __repr__(self):
         return self.__str__()
 
-# ================================================================================
-#
-# Thread class
-#
-# ================================================================================
+    def toJson(self):
+        obj = {'kind':'device','name':self.name,'id':self.uuid}
+        obj['actuatorIds'] = self.actuatorIds
+        sobjs = []
+        for sensor in self.sensors:
+            sobjs.append(sensor.toJson())
+        obj['sensors'] = sobjs
+        
+        for prop in ['hcpDeviceId','messageTypeId','messageTypeIdToDevice','messageFormat']:
+            if hasattr(self,prop):
+                val = getattr(self,prop)
+                obj[prop] = val
+        obj['isRealDevice'] = self.isRealDevice
+        return obj
 
-# A Thread instance represents a process that simulates a device emitting sensor values
-# to HCP. A Thread belongs to a device and is a transient object; it only exists while the
-# simulation is running. It's life-cycle (start,stop,pause) is controlled by the device
+    # actuator control
 
-class Thread:
-
-    def __init__(self,device):
-        self.device = device
-        self.id = device.nextThreadCounter()
-        self.reset()
-
-    @property
-    def idstr(self):
-        s = '00000000' + hex(self.id)[2:]
-        l = len(s)
-        return s[l-8:]
-
-    @property
-    def uuid(self):
-        return self.device.uuid + "-" + self.idstr
-
-    def reset(self):
-        self.__timer__ = None
-        self.__lastValue__ = None
-        self.__lastTimestamp__ = None
-        self.__messageCounter__ = 0
-
-    def send_to_hcp(self,message):
-        device = self.device
-        debug_communication = 0
+    # checks for messages for this device on HCP
+    def _poll_from_hcp(self,processFun=None):
+        device = self
+        debug_communication = 1
         #self.info("to hcp: " + message)
         if (config.proxy_url == ''):
             http = urllib3.PoolManager()
@@ -498,6 +590,8 @@ class Thread:
             http = urllib3.proxy_from_url(config.proxy_url)
 
         url='https://iotmms' + config.hcp_account_id + config.hcp_landscape_host + '/com.sap.iotservices.mms/v1/api/http/data/' + str(device.hcpDeviceId)
+
+        # https://iotmmsi806258trial.hanatrial.ondemand.com/com.sap.iotservices.mms/v1/api/http/data/
         
         if debug_communication == 1:
             self.info('url: ' + url)
@@ -506,91 +600,207 @@ class Thread:
 
         # use with authentication
         headers['Authorization'] = 'Bearer ' + device.hcpOauthCredentials
+        #headers['Authorization'] = config.hcp_authorization_header
         headers['Content-Type'] = 'application/json;charset=utf-8'
 
-        # construct the body
-        body = '{ "mode" : "async", "messageType" : "' + str(device.messageTypeId) + '", "messages" : '
-        body += message
-        body += '}'
-        if debug_communication == 1:
-            print body
-        else:
-            self.info("[" + self.idstr + "] message to hcp: " + (' '.join(message.split('\n'))))
+        if processFun == None:
+            processFun = lambda payload: self.info(str(payload))
+        
+        isfun = hasattr(processFun,'__call__')
+        
+        try:
+            r = http.urlopen('GET', url, headers=headers)
+            self.info("poll_from_hcp():" + str(r.status))
+            if (debug_communication == 1):
+                self.info(r.data)
+            json_string='{"all_messages":'+(r.data).decode("utf-8")+'}'
+            try:
+                json_string_parsed=json.loads(json_string)
+                # print(json_string_parsed)
+                # take care: if multiple messages arrive in 1 payload - their order is last in / first out - so we need to traverse in reverese order
+                try:
+                    messages_reversed=reversed(json_string_parsed["all_messages"])
+                    for single_message in messages_reversed:
+                        # print(single_message)
+                        payload=single_message["messages"][0]
+                        if isfun:
+                            processFun(payload)
+                except TypeError as te:
+                    if debug_communication:
+                        self.info("Problem decoding the message " + (r.data).decode("utf-8") + ": " + str(te))
+            except ValueError as ve:
+                if debug_communication:
+                    self.info("Problem decoding the message " + (r.data).decode("utf-8") + ": " + str(ve))
+        except Exception as e001:
+            self.info(str(e001))
 
-        r = http.urlopen('POST', url, body=body, headers=headers)
-        if debug_communication == 1:
-            self.info("send_to_hcp():" + str(r.status))
-            self.info(r.data)
-        else:
-            self.info("[" + self.idstr + "] response status: " + str(r.status) + " " + r.data)
+    def _getActuatorObjectWithId(self,id):
+        for aobj in self.actuatorObjects:
+            if aobj.id == id:
+                return aobj
+        return None
 
-    def generateHCPMessage(self,dummyMode=False,messageFormat=None):
-        device = self.device
-        msg = device.getMessageFormat() if messageFormat == None else messageFormat;
-        msgTemplate = Template(msg)
-        ts = int(time.time())
-        evalStr = 'msgTemplate.safe_substitute(timestamp=ts,'
-        evalStr += 'deviceid="' + self.uuid + '",'
-        evalStr += 'devicename="' + self.device.name + '-' + self.idstr + '"'
-        for s in device.sensors:
-            varname = s.name + '_value'
-            valueInfo = s.nextValue(timestamp = ts,lastValue=self.__lastValue__,lastTimestamp=self.__lastTimestamp__,dummyMode=dummyMode);
-            value = valueInfo['value']
-            if not dummyMode:
-                self.__lastValue__ = valueInfo['lastValue']
-                self.__lastTimestamp__ = valueInfo['lastTimestamp']
-            evalStr += ',' + varname + '=' + str(value)
-        evalStr += ')'
-        return eval(evalStr)
+    def getActuatorObjectWithName(self,name):
+        self._updateActuatorObjects()
+        for aobj in self.actuatorObjects:
+            if aobj.name == name:
+                return aobj
+        return None
 
-    def startGenerateHCPMessageThread(self,frequencyInSeconds,dummyMode=False):
-        device = self.device
-        msg = self.generateHCPMessage()
-        if not dummyMode:
-            self.send_to_hcp(msg)
-        else:
-            self.info("[" + self.idstr + "] message to dummy: " + (' '.join(msg.split('\n'))))
-        self.__messageCounter__ += 1
-        if self.__timer__ == None:
-            self.info("[" + self.idstr + "] no new cycle started, because simulation has been stopped")
-            return
-        self.__timer__ = threading.Timer(device.frequencyInSeconds,Thread.startGenerateHCPMessageThread,[self,device.frequencyInSeconds,dummyMode])
-        self.__timer__.start()
-    
-    def start(self,frequencyInSeconds,dummyMode=False):
-        # if a thread is already running stop it
-        self.stop()
-        self.info("[" + self.idstr + "] starting simulation thread with frequency " + str(frequencyInSeconds))
-        self.__lastFrequencyInSeconds__ = frequencyInSeconds
-        #self.__timer__ = threading.Timer(frequencyInSeconds,Sensor.nextValue,[self])
-        #self.__timer__.start()
-        self.__timer__ = threading.Timer(0,Thread.startGenerateHCPMessageThread,[self,self.device.frequencyInSeconds,dummyMode])
-        self.__timer__.start()
-        #self.startGenerateHCPMessageThread(frequencyInSeconds,dummyMode);
+    def _createActuatorObject(self,id):
+        isUIVersion = self.__class__.__name__.endswith('UI')
+        for aspec in actuator_config.actuatorConstructors:
+            if aspec['id'] == id:
+                actuatorObject = aspec['constructor'](uirunning=isUIVersion,device=self)
+                return actuatorObject
+        raise Exception('an actuator with id "' + id + '" is not defined in the system.')
 
-    def stop(self,paused=False,reset=False):
-        if self.__timer__ != None:
-            self.__timer__.cancel()
-            self.__timer__ = None
-            self.info("[" + self.idstr + "] simulation " + ("paused" if paused else "stopped") + ".")
-        if not paused:
-            self.__lastTimestamp__ = None
-            self.__lastValue__ = None
-            if reset:
-                self.reset()
+    def _updateActuatorObjects(self):
+        for aobj in self.actuatorObjects:
+            aobj.removed = True
+        for id in self.actuatorIds:
+            aobj = self._getActuatorObjectWithId(id)
+            if aobj != None:
+                aobj.removed = False
+                continue
+            aobj = self._createActuatorObject(id)
+            aobj.removed = False
+            self.actuatorObjects.append(aobj)
+            self.info('actuator object with id "' + id + '" created.')
+        # check for removed ones
+        newActuatorObjects = []
+        for aobj in self.actuatorObjects:
+            if aobj.removed:
+                self.info("actuator " + aobj.id + " was removed.")
+                continue
+            newActuatorObjects.append(aobj)
+        self.actuatorObjects = newActuatorObjects
 
-    def pause(self):
-        self.stop(paused=True)
+    def _dispatchActuatorMessage(self,payload):
+        self.info("dispatching message: " + str(payload))
+        self._payloadBuffer.append(payload)
+        for aobj in self.actuatorObjects:
+            aobj.processMessage(payload)
             
-    def threadIsRunning(self):
-        return self.__timer__ != None
+    def actuatorsIteration(self):
+        freq = self.pollingFrequency
+        self._updateActuatorObjects()
+        if len(self.actuatorObjects) == 0:
+            #self.info('device has no actuators')
+            return
+        self._poll_from_hcp(self._dispatchActuatorMessage)
+        if self.__pollingTimer__ != None:
+            self.__pollingTimer__ = threading.Timer(freq,Device.actuatorsIteration,[self])
+            self.__pollingTimer__.start()
 
-    def threadIsInUse(self):
-        return self.__timer__ != None or self.__lastTimestamp__ != None
+    def startPolling(self):
+        if self.url != None:
+            return postRequest(self.url,{'command':'startPolling','frequency':self.pollingFrequency})
+        self.stopPolling()
+        freq = self.pollingFrequency
+        self.__pollingTimer__ = threading.Timer(2,Device.actuatorsIteration,[self])
+        self.__pollingTimer__.start()
+        self.info('polling started')
+
+
+    def stopPolling(self,quiet=True):
+        if self.url != None:
+            return postRequest(self.url,{'command':'stopPolling'})
+        if self.__pollingTimer__ != None:
+            self.__pollingTimer__.cancel()
+            self.__pollingTimer__ = None
+            if not quiet:
+                self.info('polling stopped')
+
+    def togglePolling(self):
+        if self.pollingIsRunning:
+            self.stopPolling()
+            return "stopped"
+        else:
+            self.startPolling()
+            return "started"
 
     @property
-    def messageCount(self):
-        return self.__messageCounter__
+    def pollingIsRunning(self):
+        if self.url != None:
+            url0 = self.url + "/pollingisrunning"
+            response = urllib2.urlopen(url0)
+            data = json.loads(response.read())
+            return data['result']
+        return self.__pollingTimer__ != None
+        
+    # for remote devices: info polling; polls the info messages that are generated by the
+    # remote device
+
+    def _processPollInfoData(self,data):
+        try:
+            messages = data['messages']
+            if isinstance(messages,list):
+                for msg in messages:
+                    self.info("[remote] " + msg,"blue")
+            payloads = data['payload']
+            if isinstance(payloads,list):
+                for payload in payloads:
+                    self._dispatchActuatorMessage(payload)
+        except Exception as e:
+            self.info(str(e),"red")
+
+    def _getSensorValues(self):
+        if self.url != None:
+            return self._getRemoteSensorValues()
+        else:
+            return self._collectSensorValues()
+
+    def _getRemoteSensorValues(self):
+        url = self.url + "/sensorvalues"
+        response = urllib2.urlopen(url)
+        data = json.loads(response.read())
+        return data
     
-    def info(self,msg):
-        self.device.info(msg)
+    def _pollInfo(self,freq=1):
+        infoUrl = self.url + "/info"
+        try:
+            response = urllib2.urlopen(infoUrl)
+            data = json.loads(response.read())
+            self._processPollInfoData(data)
+            #messages = data['messages']
+            #if isinstance(messages,list):
+            #    for msg in messages:
+            #        self.info(msg)
+            #payloads = data['payload']
+            #if isinstance(payloads,list):
+            #    for payload in payloads:
+            #        self._dispatchActuatorMessage(payload)
+        except Exception as e:
+            self.info(str(e))
+        if self.__infoPollingTimer__ != None:
+            self.__infoPollingTimer__ = threading.Timer(freq,Device._pollInfo,[self,freq])
+            self.__infoPollingTimer__.start()
+            
+    def startInfoPolling(self,freq=1):
+        if self.url == None:
+            return
+        self.stopInfoPolling()
+        self.__infoPollingTimer__ = threading.Timer(1,Device._pollInfo,[self,freq])
+        self.__infoPollingTimer__.start()
+
+    def stopInfoPolling(self):
+        try:
+            self.__infoPollingTimer__.cancel()
+        except:
+            pass
+        finally:
+            self.__infoPollingTimer__ = None
+
+
+    # cleans up, stops all running threads
+    def cleanup(self):
+        if self.url != None:
+            try:
+                self.stopPolling()
+            except:
+                pass
+        try:
+            self.stopInfoPolling()
+        except:
+            pass

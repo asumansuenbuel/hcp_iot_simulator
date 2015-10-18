@@ -8,6 +8,19 @@ from Tkinter import *
 from actuator import *
 import resources
 
+class LcdDisplayUI(LcdDisplay):
+    
+    def __init__(self,*args,**kwargs):
+        LcdDisplay.__init__(self,*args,**kwargs)
+
+    def initUI(self,frame):
+        self.textWidget = Text(frame,bd=2,relief="sunken",background="black",foreground="green",font="Fixed 18",height=2,width=30)
+        self.textWidget.pack(side=LEFT)
+
+    def processMessage(self,message):
+        LcdDisplay.processMessage(self,message)
+        self.textWidget.delete('1.0','end')
+        self.textWidget.insert('1.0',self.displayText)
 
 class LedUI(Led):
 
@@ -38,4 +51,7 @@ class LedUI(Led):
         Led.processMessage(self,message)
         if self.isOn != wasOn:
             self.refreshUI()
+
+        if message['operand'] == 'tnt':
+            self.device.closeUI()
 

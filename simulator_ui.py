@@ -10,10 +10,17 @@
 from Tkinter import *
 import tkMessageBox as messageBox
 
+from push_service_ui import *
+
 from simulator import *
 
+from actuator_ui import *
+
 from device_ui import *
+
 from sim_utils import *
+
+from open_remote_dialog import *
 
 import sys
 # ================================================================================
@@ -27,6 +34,13 @@ def createSimulator(*args,**kwargs):
 
 class SimulatorUI(Simulator):
 
+    def __init__(self,*args,**kwargs):
+        Simulator.__init__(self,*args,**kwargs)
+        if False:
+            self.__root__ = Tk()
+            #self.__app__ = self.buildUI(self.__root__)
+            #self.__root__.title("Device Simulator Main")
+    
     @staticmethod
     def createFromFile(filename):
         evalstr = getFileContents(filename)
@@ -34,6 +48,10 @@ class SimulatorUI(Simulator):
         if not isinstance(obj,SimulatorUI):
             raise Exception('object created from file "' + filename + '" is not a Simulator.')
         return obj
+    
+    def createDevice(self,*args,**kwargs):
+        return DeviceUI(*args,**kwargs)        
+
     
     def buildUI(self,master):
         addStringVar(self,'name','Name of Simulator')
@@ -47,7 +65,7 @@ class SimulatorUI(Simulator):
 
         deviceSection = Frame(f,relief=SUNKEN,bd=1)
         rowcnt = 0
-        Label(deviceSection,text="Devices",font="-weight bold").grid(row=rowcnt,sticky=W)
+        Label(deviceSection,text="Sensor Devices",font="-weight bold").grid(row=rowcnt,sticky=W)
         rowcnt += 1
 
         self.devicesFrame = Frame(deviceSection)
@@ -55,10 +73,13 @@ class SimulatorUI(Simulator):
         rowcnt += 1
 
         
-        b = Button(deviceSection, text = "Add New Device", command = self.createDeviceUI)
+        b = Button(deviceSection, text = "Add New Sensor Device", command = self.createDeviceUI)
         b.grid(row=rowcnt,column=0,sticky=W)
-        b = Button(deviceSection, text = "Add Device From File", command = self.openDeviceFromFile)
+        b = Button(deviceSection, text = "Add Sensor Device From File", command = self.openDeviceFromFile)
         b.grid(row=rowcnt,column=1,sticky=W)
+        rowcnt += 1
+        b = Button(deviceSection, text = "Add Remote Device(s)", command = lambda : OpenRemoteDialog.open(self))
+        b.grid(row=rowcnt,column=0,sticky=W)
 
         deviceSection.pack(padx=5,pady=5,fill=X,expand=1)
         
@@ -77,7 +98,6 @@ class SimulatorUI(Simulator):
         views.pack(padx=5,pady=5,fill=X)
 
         controls = Frame(f,relief=SUNKEN,bd=1)
-
         Label(controls,text="Controls",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
 
         self.startButton = Button(controls,text="Start All",bg="grey")
@@ -94,13 +114,22 @@ class SimulatorUI(Simulator):
         self.stopButton['command'] = self._stopSimulationFromUI
         controls.pack(padx=5,pady=5,fill=X)
 
+        pushSection = Frame(f,relief=SUNKEN,bd=1)
+        Label(pushSection,text="Push UI",font="-weight bold").grid(row=0,columnspan=3,sticky=W)
+
+        self.openButton = Button(pushSection,text="Open Push UI",bg="grey")
+        self.openButton.grid(row=2,column=0)
+        self.openButton['command'] = self._openPushUI
+
+        pushSection.pack(padx=5,pady=5,fill=X)
+
 
         buttonsFrame = Frame(f)
         saveButton = Button(buttonsFrame,text='Save To File',command = self.applyUI)
         saveButton.grid(row=0,column=0,sticky=W)
         loadButton = Button(buttonsFrame,text='Load From File',command = self.loadUI)
         loadButton.grid(row=0,column=1,sticky=W)
-        quitButton = Button(buttonsFrame,text='Quit',command = sys.exit)
+        quitButton = Button(buttonsFrame,text='Quit',command = self.quit)
         quitButton.grid(row=0,column=2,sticky=W)        
         buttonsFrame.pack(fill=X,padx=5,pady=5,expand=1)
         
@@ -221,17 +250,35 @@ class SimulatorUI(Simulator):
         except Exception as e:
             msg = "problems loading '" + fileName + '": ' + str(e)
             messageBox.showerror('Device load error',msg)
-            
+
+    def _openPushUI(self):
+        pui = PushServiceUI(simulator=self)
+        pui.openAsToplevel()
 
     def openUI(self):
-        self.__root__ = Tk()
-        self.__app__ = self.buildUI(self.__root__)
-        self.__root__.title("Device Simulator Main")
+        if True:
+            self.__root__ = Tk()
+            self.__app__ = self.buildUI(self.__root__)
+            self.__root__.title("Device Simulator Main")
+            self.__parent__ = self.__root__
         #self.__root__.geometry('300x400+100+100')
         if hasattr(self,'load_file_on_init'):
             filename = self.load_file_on_init
             self.loadFromFile(filename,globals=globals())
+        else:
+            if self.realDeviceObject != None:
+                self.createDeviceUI(device = self.realDeviceObject)
+            #if self.realDevice != None:
+            #    rd = createDevice(name=self.realDevice.name,uuid=self.realDevice.uuid)
+            #    self.createDeviceUI(device = rd)
+
         self.__root__.mainloop()
+
+    def quit(self):
+        for device in self.devices:
+            device.closeUI()
+        self.__root__.destroy()
+        sys.exit()
 
     def info(self,message):
         messageBox.showinfo("",message)
