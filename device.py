@@ -795,7 +795,7 @@ class Device(FilePersistedObject):
 
     # cleans up, stops all running threads
     def cleanup(self):
-        if self.url != None:
+        if self.url == None:
             try:
                 self.stopPolling()
             except:
