@@ -16,7 +16,8 @@ hcp_landscape_host='.hanatrial.ondemand.com'
 # of course, user and password have to be substituted accordingly using the HCP credentials. Copy/paste the output of
 # this command as value of the hcp_authorization_header variable below:
 
-hcp_authorization_header='Basic xxxxxxxxxxxxxxxxxxxx'
+#hcp_authorization_header='Basic xxxxxxxxxxxxxxxxxxxx'
+hcp_authorization_header='Basic aTgwNjI1ODpHZWxjZW8yNA=='
 
 # optional network proxy, set if to be used, otherwise set to ''
 proxy_url=''
