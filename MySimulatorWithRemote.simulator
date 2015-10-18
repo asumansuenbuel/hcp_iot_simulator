@@ -1,0 +1,102 @@
+createSimulator(
+  name = stringUnescape("MySimulatorWithRemote"),
+  devices = [
+      createDevice(
+        uuid = "fa847c1c-57f9-11e5-a992-60f81dcc03d6",
+        name = stringUnescape("Raspberry"),
+        actuatorIds = [stringUnescape("redLed"), stringUnescape("blueLed"), stringUnescape("greenLed"), stringUnescape("lcdDisplay")],
+        sensors = [
+            createSensor(
+              name = stringUnescape("Temperature"),
+              unitName = stringUnescape("C"),
+              isFloat = False,
+              minValue = 10.0,
+              maxValue = 50.0,
+              isRealSensor = False,
+              varianceSeconds = 60.0,
+              varianceValue = 1.0,
+              ndigitsAfterDecimalPoint = 2,
+              description = stringUnescape("")
+            ),
+            createSensor(
+              name = stringUnescape("Humidity"),
+              unitName = stringUnescape("%25"),
+              isFloat = False,
+              minValue = 20,
+              maxValue = 60,
+              isRealSensor = False,
+              startValue = 25,
+              varianceSeconds = 60,
+              varianceValue = 1,
+              ndigitsAfterDecimalPoint = 2,
+              description = stringUnescape("")
+            )      
+  ],
+        instanceCount = 1,
+        hcpDeviceId = "e071373c-95cd-41cc-ae29-08013948a60e",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageTypeIdToDevice = "852f6dac7c92f08167bb",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 5,
+        description = stringUnescape("")
+      ),
+      createDevice(
+        uuid = "cd554d51-585d-11e5-a0fd-60f81dcc03d6",
+        name = stringUnescape("Refrigerator"),
+        actuatorIds = [stringUnescape("redLed"), stringUnescape("lcdDisplay"), stringUnescape("blueLed")],
+        sensors = [
+            createSensor(
+              name = stringUnescape("Temperature"),
+              unitName = stringUnescape("C"),
+              isFloat = False,
+              minValue = -10.0,
+              maxValue = 25.0,
+              isRealSensor = False,
+              startValue = 10.0,
+              varianceSeconds = 1.0,
+              varianceValue = 1.0,
+              ndigitsAfterDecimalPoint = 2,
+              description = stringUnescape("")
+            )      
+  ],
+        instanceCount = 1,
+        hcpDeviceId = "e071373c-95cd-41cc-ae29-08013948a60e",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageTypeIdToDevice = "852f6dac7c92f08167bb",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 10,
+        description = stringUnescape("")
+      ),
+      createDevice(
+        uuid = "352e0b11-6303-11e5-bf00-60f81dcc03d6",
+        name = stringUnescape("Toaster"),
+        actuatorIds = [],
+        sensors = [
+      
+  ],
+        instanceCount = 1,
+        hcpDeviceId = "62erg42g4g2g45g42g245g45266542ger",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageTypeIdToDevice = "65436543654365436543",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 10,
+        description = stringUnescape("")
+      ),
+      createDevice(
+        uuid = "b8:27:eb:24:7b:8e",
+        name = stringUnescape("RaspberryPi%20with%20GrovePi"),
+        instanceCount = 1,
+        url = "http://192.168.1.79:6540/device/0",
+        hcpDeviceId = "e071373c-95cd-41cc-ae29-08013948a60e",
+        hcpOauthCredentials = "d5694e348c62b324baab95eb7e77ca2",
+        messageTypeId = "d094fb47dce3960d95b3",
+        messageTypeIdToDevice = "852f6dac7c92f08167bb",
+        messageFormat = stringUnescape("default"),
+        frequencyInSeconds = 10,
+        description = stringUnescape("")
+      )
+  ]
+)
