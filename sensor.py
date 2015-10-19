@@ -103,7 +103,7 @@ class Sensor(FilePersistedObject):
         ts = int(time.time()) if timestamp == None else timestamp
         realValueMode = self.isRealSensor
         if realValueMode:
-            value = self.getRealValue()
+            value = self.getRealValue(self)
             print 'real value for sensor "' + self.name + '" = ' + str(value)
         elif dummyMode:
             value = self.getRandomValueInRange()
