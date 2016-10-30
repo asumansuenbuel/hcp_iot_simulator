@@ -103,7 +103,14 @@ class SensorUI(Sensor):
     def _updateRealValue(self):
         if hasattr(self,'realValueLabel'):
             label = self.realValueLabel
-            value = self.getRealValue.__call__(self)
+            value = None
+            try:
+                value = self.getRealValue.__call__(self)
+            except:
+                try:
+                    value = self.getRealValue()
+                except:
+                    value = "*** error reading sensor value ***"
             label.config(text=str(value))
 
     def _updateRealValueLoop(self):
