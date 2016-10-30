@@ -5,11 +5,11 @@
 
 from sim_utils import runs_on_raspberry
 
-try:
-    from grovepi import *
-    from grove_rgb_lcd import *
-except:
-    pass
+#try:
+from grovepi import *
+from grove_rgb_lcd import *
+#except:
+#    print "*** there was a problem accessing the grovepi libs"
 
 id = "grovepi"
 name = "RaspberryPi with GrovePi"
@@ -62,6 +62,10 @@ def temperature_getValue(sensor):
     #setText("temperature: " + str(temp) + "C")
     return temp
 
+def temperature_getInfo(sensor):
+    return "Temperature value from temperature and humidity sensor connected at input D7"
+
+
 def humidity_init(sensor):
     sensor.name = "Humidity"
     sensor.unitName = "%"
@@ -72,6 +76,9 @@ def humidity_getValue(sensor):
     [ temp,hum ] = dht(sensor.dht_sensor_port,0)
     return hum
     
+def humidity_getInfo(sensor):
+    return "Humidity value from temperature and humidity sensor connected at input D7"
+
 def light_init(sensor):
     sensor.name = "Light"
     sensor.unitName = "Lux"
@@ -89,3 +96,6 @@ def ranger_init(sensor):
 def ranger_getValue(sensor):
     pin = sensor.rangerInput
     return ultrasonicRead(pin)
+
+def ranger_getInfo(sensor):
+    return "Ultrasonic ranger connected at input D3"

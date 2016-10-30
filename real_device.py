@@ -60,7 +60,7 @@ class RealDevice(FilePersistedObject):
             for sid in sensorIds:
                 obj = {}
                 addObj = False
-                for suffix in ['init','getValue']:
+                for suffix in ['init','getValue','getInfo']:
                     funName = sid + '_' + suffix
                     if hasattr(config,funName):
                         print funName + ' found'
@@ -102,6 +102,8 @@ class RealDevice(FilePersistedObject):
             sensor = d.createSensor(name=initialName,isRealSensor=True)
             if obj.has_key('getValue'):
                 sensor.getRealValue = obj['getValue']
+            if obj.has_key('getInfo'):
+                sensor.getRealInfo = obj['getInfo']
             try:
                 fun = obj['init']
                 fun(sensor)

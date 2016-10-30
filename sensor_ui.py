@@ -52,10 +52,15 @@ class SensorUI(Sensor):
 
         if self.isRealSensor:
             labelFrame = Frame(f)
-            Label(labelFrame,text="This is a real sensor.").grid(row=0,columnspan=3)
-            Label(labelFrame,text="Current Value:").grid(row=1,column=0)
+            rowcnt0 = 0
+            Label(labelFrame,text="This is a real sensor.").grid(row=rowcnt0,columnspan=3)
+            rowcnt0 += 1
+            if hasattr(self,'getRealInfo'):
+                Label(labelFrame,text = self.getRealInfo.__call__(self)).grid(row=rowcnt0,columnspan=3)
+                rowcnt0 += 1
+            Label(labelFrame,text="Current Value:").grid(row=rowcnt0,column=0)
             self.realValueLabel = Label(labelFrame,text="",width=8,bd=2,relief="sunken")
-            self.realValueLabel.grid(row=1,column=1)
+            self.realValueLabel.grid(row=rowcnt0,column=1)
             #Button(labelFrame,text="Update",command=self._updateRealValue).grid(row=1,column=2)
             labelFrame.pack()
             self._updateRealValueLoop()
@@ -98,7 +103,8 @@ class SensorUI(Sensor):
     def _updateRealValue(self):
         if hasattr(self,'realValueLabel'):
             label = self.realValueLabel
-            label.config(text=str(self.getRealValue()))
+            value = self.getRealValue.__call__(self)
+            label.config(text=str(value))
 
     def _updateRealValueLoop(self):
         self._updateRealValue()
