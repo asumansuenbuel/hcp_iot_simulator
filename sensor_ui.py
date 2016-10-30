@@ -56,7 +56,15 @@ class SensorUI(Sensor):
             Label(labelFrame,text="This is a real sensor.").grid(row=rowcnt0,columnspan=3)
             rowcnt0 += 1
             if hasattr(self,'getRealInfo'):
-                Label(labelFrame,text = self.getRealInfo.__call__(self)).grid(row=rowcnt0,columnspan=3)
+                realInfoText = ""
+                try:
+                    realInfoText = self.getRealInfo.__call__(self)
+                except:
+                    try:
+                        realInfoText = self.getRealInfo()
+                    except:
+                        pass
+                Label(labelFrame,text = realInfoText).grid(row=rowcnt0,columnspan=3)
                 rowcnt0 += 1
             Label(labelFrame,text="Current Value:").grid(row=rowcnt0,column=0)
             self.realValueLabel = Label(labelFrame,text="",width=8,bd=2,relief="sunken")
