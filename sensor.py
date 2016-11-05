@@ -139,17 +139,24 @@ class Sensor(FilePersistedObject):
                     #print "value: " + str(value)
                     nextLastValue = value
                     
+        value_error = False
         if self.isFloat:
             if self.ndigitsAfterDecimalPoint != None:
                 value = round(value,self.ndigitsAfterDecimalPoint)
         else:
-            value = int(round(value))
+            try:
+                value = int(round(value))
+            except:
+                value_error = True
 
-        nextLastTimestamp = ts
-        if dummyMode or realValueMode:
-            res = {'value' : value, 'timestamp' : ts, 'lastValue' : None, 'lastTimestamp' : None}
+        if value_error:
+            res = None
         else:
-            res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
+            nextLastTimestamp = ts
+            if dummyMode or realValueMode:
+                res = {'value' : value, 'timestamp' : ts, 'lastValue' : None, 'lastTimestamp' : None}
+            else:
+                res = {'value' : value, 'timestamp' : ts, 'lastValue' : nextLastValue, 'lastTimestamp' : nextLastTimestamp}
         return res
 
     def getRealValue(self):

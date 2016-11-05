@@ -55,7 +55,7 @@ class DeviceThread:
         
     def send_to_hcp(self,message):
         device = self.device
-        debug_communication = 0
+        debug_communication = 1
         #self.info("to hcp: " + message)
         if (config.proxy_url == ''):
             http = urllib3.PoolManager()
@@ -103,6 +103,8 @@ class DeviceThread:
             lval = self.lastValues[scnt]
             lts = self.lastTimestamps[scnt]
             valueInfo = s.nextValue(timestamp = ts,lastValue=lval,lastTimestamp=lts,dummyMode=dummyMode);
+            if valueInfo == None:
+                continue
             value = valueInfo['value']
             if not dummyMode:
                 #self.__lastValue__ = valueInfo['lastValue']
